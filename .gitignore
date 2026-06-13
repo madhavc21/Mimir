@@ -1,0 +1,23 @@
+# Rust / Cargo
+/src-tauri/target/
+
+# Node / Frontend
+node_modules/
+/ui/node_modules/
+/ui/dist/
+.eslintcache
+
+
+# Application Specific
+.env
+/snippets/
+
+# Operating System Files
+Thumbs.db
+db.shadow
+.DS_Store
+*.local
+
+# Dev
+lab/
+_docs/

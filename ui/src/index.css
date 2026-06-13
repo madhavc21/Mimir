@@ -1,0 +1,22 @@
+:root {
+  font-family: system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+
+html {
+  background: transparent !important;
+}
+
+body {
+  margin: 0;
+  background: transparent !important;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  background: transparent !important;
+  border: none !important;
+}

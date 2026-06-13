@@ -1,0 +1,13 @@
+# Python Sidecar Ignores
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+logs/
+
+# PyInstaller Output
+build/
+dist/
+*.spec

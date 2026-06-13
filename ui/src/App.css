@@ -1,0 +1,334 @@
+/* Layout wrapper — fills the transparent OS window */
+.window-viewport {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  background: transparent;
+  /* Rounded mask so the acrylic window has soft corners */
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+/* Glassmorphic Chat Card — the native OS acrylic blur provides the frosted effect.
+   CSS backdrop-filter can only blur *webview* content, not the desktop.
+   We keep this layer nearly transparent so the acrylic shows through. */
+.chat-card {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  /* Very light dark tint — lets the OS acrylic blur shine through */
+  background: rgba(10, 10, 16, 0.50);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Custom Header with Purple Pulsing Dot */
+.chat-header {
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: move;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a78bfa;
+  box-shadow: 0 0 6px 2px rgba(167, 139, 250, 0.6);
+}
+
+.header-title {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* Core Chat Stream Layout */
+.chat-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: none; /* Hide scrollbars */
+}
+
+.messages-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Context Banner design */
+.context-banner {
+  margin: 10px 14px 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1px solid rgba(167, 139, 250, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.context-banner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.context-pill {
+  font-size: 9px;
+  font-weight: 600;
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.15);
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.context-clear {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.context-clear:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.context-banner-text {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+/* Chat Message Bubbles */
+.message-row {
+  display: flex;
+  min-width: 0;
+}
+
+.user-row {
+  justify-content: flex-end;
+}
+
+.assistant-row {
+  justify-content: flex-start;
+}
+
+.message-bubble {
+  max-width: 78%;
+  min-width: 0;
+  padding: 7px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.user-bubble {
+  border-radius: 14px 14px 4px 14px;
+  background: rgba(139, 92, 246, 0.55);
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.assistant-bubble {
+  border-radius: 14px 14px 14px 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Markdown overflow — scroll wide content inside the bubble */
+.assistant-bubble p,
+.assistant-bubble ul,
+.assistant-bubble ol {
+  margin: 0 0 0.4em;
+}
+
+.assistant-bubble p:last-child,
+.assistant-bubble ul:last-child,
+.assistant-bubble ol:last-child {
+  margin-bottom: 0;
+}
+
+.assistant-bubble pre {
+  margin: 0.4em 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11px;
+}
+
+.assistant-bubble code {
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.assistant-bubble table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin: 0.4em 0;
+}
+
+.assistant-bubble th,
+.assistant-bubble td {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+
+.assistant-bubble blockquote {
+  margin: 0.4em 0;
+  padding-left: 8px;
+  border-left: 2px solid rgba(255, 255, 255, 0.2);
+  overflow-x: auto;
+}
+
+/* Chat Input Bar Layout */
+.chat-footer {
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-footer input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 7px 12px;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+}
+
+.send-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
+  outline: none;
+}
+
+.send-button.active {
+  background: rgba(139, 92, 246, 0.75);
+  cursor: pointer;
+}
+
+.send-button.active:active {
+  transform: scale(0.95);
+}
+
+/* --- Settings Overlay Styles --- */
+.icon-button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.icon-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.settings-view {
+  flex: 1;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: fade-in 0.2s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.settings-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.05em;
+  margin-left: 2px;
+}
+
+.settings-input {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s, background 0.2s;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.settings-input:focus {
+  border-color: rgba(167, 139, 250, 0.6);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.settings-hint {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  margin-left: 2px;
+}
