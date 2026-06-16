@@ -1,5 +1,6 @@
 # Rust / Cargo
 /src-tauri/target/
+/src-tauri/binaries/
 
 # Node / Frontend
 node_modules/
