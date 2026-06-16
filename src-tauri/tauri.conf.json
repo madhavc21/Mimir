@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Buddy",
+  "productName": "Mimir",
   "version": "0.1.0",
   "identifier": "com.madhavc21.buddy",
   "build": {
@@ -12,8 +12,20 @@
   "app": {
     "windows": [
       {
+        "label": "console",
+        "title": "Mimir",
+        "width": 680,
+        "height": 520,
+        "resizable": true,
+        "visible": true,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "transparent": false,
+        "url": "console.html"
+      },
+      {
         "label": "main",
-        "title": "Buddy",
+        "title": "Mimir",
         "width": 260,
         "height": 380,
         "resizable": true,
@@ -25,16 +37,16 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost",
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https://asset.localhost blob: data:",
       "assetProtocol": {
         "enable": true,
-        "scope": ["**/*"]
+        "scope": ["$TEMP/mimir_snippets/**", "$TEMP/**"]
       }
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "externalBin": [
       "binaries/capture",
       "binaries/chat"

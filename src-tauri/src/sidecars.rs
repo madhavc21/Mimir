@@ -1,5 +1,6 @@
 use tauri::AppHandle;
 use tauri::Emitter;
+use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 
@@ -27,35 +28,40 @@ pub async fn stream_chat(
     image_path: String,
     history_json: String,
     api_key: String,
+    model: String,
 ) -> Result<(), String> {
-
     let cmd = if is_dev() {
+        // Use local venv incase of dev environment
         app.shell()
             .command("../sidecars/.venv/Scripts/python")
             .args([
-                "../sidecars/chat.py", 
-                &message, 
-                &image_path, 
-                &history_json
+                "../sidecars/chat.py",
+                &message,
+                &image_path,
+                &history_json,
+                &model,
             ])
-        } else {
-            app.shell()
-                .sidecar("chat")
-                .map_err(|e| e.to_string())?
-                .args([&message, &image_path, &history_json])
-        };
-    
+    } else {
+        // Use pre-built binaries in production
+        app.shell()
+            .sidecar("chat")
+            .map_err(|e| e.to_string())?
+            .args([&message, &image_path, &history_json, &model])
+    };
+
     let (mut rx, child) = cmd
         .env("GEMINI_API_KEY", &api_key)
         .spawn()
         .map_err(|e| e.to_string())?;
-    
+
     tauri::async_runtime::spawn(async move {
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line_bytes) => {
                     let line = String::from_utf8_lossy(&line_bytes);
-                    let _ = app.emit("chat-stream-chunk", line.to_string());
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.emit("chat-stream-chunk", line.to_string());
+                    }
                 }
                 CommandEvent::Stderr(line_bytes) => {
                     eprintln!("chat stderr: {}", String::from_utf8_lossy(&line_bytes));

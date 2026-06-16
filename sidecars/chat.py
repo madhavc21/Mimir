@@ -18,9 +18,9 @@ if not os.environ.get("GEMINI_API_KEY"):
     sys.exit(1)
 
 SYSTEM_PROMPT = """
-You are Buddy, a helpful AI assistant. 
-The user has highlighted some text from their screen (under "Highlighted Text:") and is asking you a question about it. 
-Answer the question and provide the user with additional helpful information based on the highlighted text. 
+You are Mimir, a helpful AI assistant.
+The user has highlighted some text from their screen (under "Highlighted Text:") and is asking you a question about it.
+Answer the question and provide the user with additional helpful information based on the highlighted text.
 If highlighted text is empty then report the same to the user.
 """
 
@@ -129,6 +129,13 @@ def inference(message, image_path, history, model="gemini/gemini-2.5-flash-lite"
         logger.exception("Exception occurred during model inference")
         yield f"An Error occurred: {e}"
         
+def normalize_model(model_id):
+    if not model_id:
+        return "gemini/gemini-2.5-flash-lite"
+    if "/" in model_id:
+        return model_id
+    return f"gemini/{model_id}"
+
 def stream_for_rust(message, image_path, history, model="gemini/gemini-2.5-flash-lite"):
     clean_image_path = None
     if image_path and image_path.lower() not in ("none", "null", ""):
@@ -169,8 +176,9 @@ def main():
         logger.exception("Failed to parse history JSON argument")
         print(json.dumps({"status": "error", "message": "Failed to parse history JSON", "traceback": traceback.format_exc()}))
         sys.exit(1)
-        
-    stream_for_rust(message, image_path, history_json)
+
+    model = normalize_model(sys.argv[4] if len(sys.argv) > 4 else "")
+    stream_for_rust(message, image_path, history_json, model=model)
     
 if __name__ == "__main__":
     try:

@@ -3,11 +3,14 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": [
-    "main"
+    "main",
+    "console"
   ],
   "permissions": [
     "core:default",
     "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "autostart:default",
     "core:window:allow-start-dragging",
     "store:default",
     {

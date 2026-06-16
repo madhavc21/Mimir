@@ -8,7 +8,7 @@ from services.logger import setup_logger
 logger = setup_logger("capture")
 
 # Resolve the absolute path of the directory containing this script,
-# then get its parent directory (the project root 'buddy/')
+# then get its parent directory (the project root)
 if getattr(sys, "frozen", False):
     # For compiled .exe
     root_dir = Path(sys.executable).parent
@@ -86,7 +86,7 @@ def main():
             print(json.dumps({"status":"error", "message": f"Invalid selection: Please make a larger selection"}))
             return
         import tempfile
-        snippets_dir = Path(tempfile.gettempdir()) / "buddy_snippets"
+        snippets_dir = Path(tempfile.gettempdir()) / "mimir_snippets"
         snippets_dir.mkdir(exist_ok=True)
         save_path = str(snippets_dir / f"capture_{int(time.time())}.png")
         capture_selected_bmp(x,y,w,h, save=True, save_name=save_path)

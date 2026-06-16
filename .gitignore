@@ -21,3 +21,5 @@ db.shadow
 # Dev
 lab/
 _docs/
+scripts/
+ui/.agents/

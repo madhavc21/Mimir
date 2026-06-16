@@ -11,7 +11,7 @@ def setup_logger(service: str) -> logging.Logger:
     if getattr(sys, "frozen", False):
         import tempfile
         # In production, write logs to the OS Temp directory to avoid Program Files permission errors
-        logs_dir = Path(tempfile.gettempdir()) / "buddy_logs"
+        logs_dir = Path(tempfile.gettempdir()) / "mimir_logs"
     else:
         # In development, write logs to the local sidecars/logs folder
         sidecar_root = Path(__file__).resolve().parent.parent
