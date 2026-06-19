@@ -97,8 +97,8 @@ cd sidecars
 pip install pyinstaller
 
 # Build the standalone executables
-pyinstaller --onefile --name capture capture.py
-pyinstaller --onefile --collect-data="litellm" --hidden-import="tiktoken_ext.openai_public" --hidden-import="tiktoken_ext" --name chat chat.py
+pyinstaller capture.spec
+pyinstaller chat.spec
 ```
 
 ### 2. Stage Binaries for Tauri

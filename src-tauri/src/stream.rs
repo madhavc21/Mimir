@@ -1,5 +1,5 @@
-use tauri_plugin_store::StoreExt;
 use tauri::AppHandle;
+use tauri_plugin_store::StoreExt;
 
 use crate::sidecars;
 
@@ -11,6 +11,7 @@ pub async fn stream_from_python(
     message: String,
     image_path: Option<String>,
     history: Option<serde_json::Value>,
+    target_window: Option<String>,
 ) -> Result<(), String> {
     let store = app_handle.store("settings.json").map_err(|e| e.to_string())?;
     store.reload().map_err(|e| e.to_string())?;
@@ -34,6 +35,8 @@ pub async fn stream_from_python(
     let history_json = serde_json::to_string(&history.unwrap_or(serde_json::json!([])))
         .unwrap_or_else(|_| "[]".to_string());
 
+    let window = target_window.unwrap_or_else(|| "main".to_string());
+
     sidecars::stream_chat(
         app_handle,
         message,
@@ -41,6 +44,7 @@ pub async fn stream_from_python(
         history_json,
         api_key,
         model,
+        window,
     )
     .await
 }
