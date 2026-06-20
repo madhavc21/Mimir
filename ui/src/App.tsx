@@ -1,262 +1,320 @@
-import { useState, useEffect, useRef } from "react";
-import { Send, Settings } from "lucide-react";
-import ReactMarkdown from 'react-markdown';
-import { listen } from '@tauri-apps/api/event';
-import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-import './App.css';
-
-interface Message {
-  id: number;
-  text: string;
-  role: "user" | "assistant";
-}
-
-type ChatStatus = 'idle' | 'pending' | 'streaming';
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Plus, History, Maximize2, Minimize2 } from 'lucide-react'
+import { listen } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import ChatPanel from '@/components/ChatPanel'
+import {
+  formatThreadDate,
+  listThreads,
+  sortThreads,
+  type ThreadMeta,
+} from '@/lib/chats'
+import { loadSettings } from '@/lib/settings'
+import './App.css'
 
 export default function App() {
-  const [copiedText, setCopiedText] = useState<string>("");
-  const [copiedImage, setCopiedImage] = useState<string>("");
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    { id: 0, text: "Hey! How can I help you?", role: "assistant" }
-  ]);
-  const [chatStatus, setChatStatus] = useState<ChatStatus>('idle');
+  const [copiedText, setCopiedText] = useState('')
+  const [copiedImage, setCopiedImage] = useState('')
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
+  const [chatSessionKey, setChatSessionKey] = useState(0)
+  const [isLocked, setIsLocked] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [focusRequest, setFocusRequest] = useState(0)
+  const [showHistory, setShowHistory] = useState(false)
+  const [threads, setThreads] = useState<ThreadMeta[]>([])
+  const [ghostMessage, setGhostMessage] = useState<string | null>(null)
+  const historyRef = useRef<HTMLDivElement>(null)
 
-  const inputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const refreshThreads = useCallback(async () => {
+    try {
+      const list = await listThreads()
+      setThreads(sortThreads(list))
+    } catch (e) {
+      console.error('list_threads failed', e)
+    }
+  }, [])
+
+  const startNewChat = useCallback(() => {
+    setActiveThreadId(null)
+    setChatSessionKey((k) => k + 1)
+    setShowHistory(false)
+    setFocusRequest((n) => n + 1)
+  }, [])
+
+  const applyCaptureContext = useCallback(
+    async (text?: string, image?: string) => {
+      const settings = await loadSettings()
+
+      if (!isLocked) {
+        if (settings.hotkeyOpens === 'latest') {
+          try {
+            const list = await listThreads()
+            const latest = sortThreads(list)[0]
+            setActiveThreadId(latest?.id ?? null)
+          } catch (e) {
+            console.error('list_threads failed', e)
+            startNewChat()
+          }
+        } else {
+          startNewChat()
+        }
+      }
+
+      if (text) {
+        setCopiedText(text)
+        setCopiedImage('')
+      }
+      if (image) {
+        setCopiedImage(image)
+        setCopiedText('')
+      }
+
+      setFocusRequest((n) => n + 1)
+    },
+    [isLocked, startNewChat],
+  )
 
   useEffect(() => {
-    const unlistenPromise = listen<string>('capture-text', (event) => {
+    const init = async () => {
       try {
-        const payload = JSON.parse(event.payload);
+        const [locked, expanded] = await invoke<[boolean, boolean]>('get_card_state')
+        setIsLocked(locked)
+        setIsExpanded(expanded)
+      } catch (e) {
+        console.error('get_card_state failed', e)
+      }
+      await refreshThreads()
+    }
+    init()
+  }, [refreshThreads])
+
+  useEffect(() => {
+    if (!ghostMessage) return
+    const timer = setTimeout(() => setGhostMessage(null), 1000)
+    return () => clearTimeout(timer)
+  }, [ghostMessage])
+
+  useEffect(() => {
+    if (!showHistory) return
+    const onDocClick = (e: MouseEvent) => {
+      if (historyRef.current && !historyRef.current.contains(e.target as Node)) {
+        setShowHistory(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [showHistory])
+
+  useEffect(() => {
+    const unlistenText = listen<string>('capture-text', (event) => {
+      try {
+        const payload = JSON.parse(event.payload)
         if (payload.status === 'success' && payload.result) {
-          setCopiedText(payload.result);
-          setCopiedImage("");
-          setMessages([
-            { id: Date.now(), text: "I've captured your selected text. What would you like me to do with it?", role: "assistant" }
-          ]);
+          applyCaptureContext(payload.result)
+        } else if (payload.status === 'error' && payload.message) {
+          setGhostMessage(String(payload.message))
         }
       } catch {
-        setCopiedText(event.payload);
+        applyCaptureContext(event.payload)
       }
-      setChatStatus('idle');
-      setTimeout(() => inputRef.current?.focus(), 50);
-    });
+    })
 
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, []);
-
-  useEffect(() => {
-    const unlistenPromise = listen<string>('capture-screen', (event) => {
+    const unlistenScreen = listen<string>('capture-screen', (event) => {
       try {
-        const payload = JSON.parse(event.payload);
+        const payload = JSON.parse(event.payload)
         if (payload.status === 'success' && payload.result) {
-          setCopiedImage(payload.result);
-          setCopiedText("");
-          setMessages([
-            { id: Date.now(), text: "I've captured a screenshot of your selection. What would you like to know about it?", role: "assistant" }
-          ]);
+          applyCaptureContext(undefined, payload.result)
         }
       } catch (e) {
-        console.error("Failed to parse screen capture", e);
+        console.error('Failed to parse screen capture', e)
       }
-      setChatStatus('idle');
-      setTimeout(() => inputRef.current?.focus(), 50);
-    });
+    })
+
+    const unlistenReset = listen('session-reset', () => {
+      startNewChat()
+      setCopiedText('')
+      setCopiedImage('')
+    })
+
+    const unlistenLock = listen<boolean>('card-lock-changed', (event) => {
+      setIsLocked(event.payload)
+    })
+
+    const unlistenExpand = listen<boolean>('card-expanded-changed', (event) => {
+      setIsExpanded(event.payload)
+    })
 
     return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, []);
-
-  useEffect(() => {
-    const unlistenPromise = listen('session-reset', () => {
-      setMessages([
-        { id: Date.now(), text: "Hey! How can I help you?", role: "assistant" }
-      ]);
-      setCopiedText("");
-      setCopiedImage("");
-      setInput("");
-      setChatStatus('idle');
-    });
-
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, []);
-
-  useEffect(() => {
-    const unlistenChunk = listen<string>('chat-stream-chunk', (event) => {
-      try {
-        const payload = JSON.parse(event.payload);
-        if (payload.token) {
-          setChatStatus('streaming');
-          setMessages(prev => {
-            const newMsgs = [...prev];
-            const lastMsg = newMsgs[newMsgs.length - 1];
-            if (lastMsg && lastMsg.role === "assistant") {
-              lastMsg.text = payload.token;
-            }
-            return newMsgs;
-          });
-        }
-      } catch (e) {
-        console.error("Failed to parse chunk", e);
-      }
-    });
-
-    return () => {
-      unlistenChunk.then((unlisten) => unlisten());
-    };
-  }, []);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+      unlistenText.then((fn) => fn())
+      unlistenScreen.then((fn) => fn())
+      unlistenReset.then((fn) => fn())
+      unlistenLock.then((fn) => fn())
+      unlistenExpand.then((fn) => fn())
+    }
+  }, [applyCaptureContext, startNewChat])
 
   const openConsole = async () => {
     try {
-      await invoke('open_console');
+      await invoke('open_console')
     } catch (e) {
-      console.error('open_console failed', e);
+      console.error('open_console failed', e)
     }
-  };
+  }
 
-  const send = async () => {
-    const text = input.trim();
-    if (!text || chatStatus === 'pending') return;
-
-    const formattedPrompt = `Highlighted Text: ${copiedText}\n\nquestion:\n${text}`;
-
-    const userMsg: Message = { id: Date.now(), text, role: "user" };
-    const placeholderMsg: Message = { id: Date.now() + 1, text: "...", role: "assistant" };
-
-    const formattedHistory = messages
-      .filter((_, index) => index > 0)
-      .map((m) => ({
-        role: m.role,
-        content: m.text
-      }));
-
-    setMessages((prev) => [...prev, userMsg, placeholderMsg]);
-    setInput("");
-    setChatStatus('pending');
-
+  const setCardLocked = async (locked: boolean) => {
     try {
-      await invoke('stream_from_python', {
-        message: formattedPrompt,
-        imagePath: copiedImage || null,
-        history: formattedHistory
-      });
-      setChatStatus('idle');
+      await invoke('set_card_locked', { locked })
+      setIsLocked(locked)
+      setGhostMessage(locked ? 'Locked' : 'Unlocked')
     } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      setMessages(prev => {
-        const newMsgs = [...prev];
-        const lastMsg = newMsgs[newMsgs.length - 1];
-        if (lastMsg.role === "assistant") {
-          lastMsg.text = errMsg;
-        }
-        return newMsgs;
-      });
-      setChatStatus('idle');
+      console.error('set_card_locked failed', e)
     }
-  };
+  }
 
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      send();
+  const toggleLock = () => setCardLocked(!isLocked)
+
+  const toggleExpanded = async () => {
+    try {
+      const expanded = await invoke<boolean>('toggle_card_expanded')
+      setIsExpanded(expanded)
+    } catch (e) {
+      console.error('toggle_card_expanded failed', e)
     }
-  };
+  }
 
-  const sendDisabled = !input.trim() || chatStatus === 'pending';
+  const selectThread = (id: string) => {
+    setActiveThreadId(id)
+    setShowHistory(false)
+    setFocusRequest((n) => n + 1)
+  }
+
+  const handleHeaderMouseDown = async (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+
+    const target = e.target as HTMLElement
+    if (target.closest('button, .history-dropdown, [data-header-no-drag]')) {
+      return
+    }
+
+    if (e.detail === 2) {
+      e.preventDefault()
+      toggleLock()
+      return
+    }
+
+    if (e.detail === 1) {
+      try {
+        await getCurrentWindow().startDragging()
+      } catch (err) {
+        console.error('startDragging failed', err)
+      }
+    }
+  }
 
   return (
     <div className="window-viewport">
       <div className="chat-card" onClick={(e) => e.stopPropagation()}>
-        <div className="chat-header">
-          <div
-            className="chat-header-drag"
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}
-            data-tauri-drag-region
+        <div className="chat-header" onMouseDown={handleHeaderMouseDown}>
+          <button
+            type="button"
+            className="header-brand"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              openConsole()
+            }}
+            title="Go to console"
           >
             <img src="/mimir_logo.png" alt="" className="header-logo" />
             <span className="header-title">Mimir</span>
-          </div>
+          </button>
+          <div className="chat-header-spacer" aria-hidden="true" />
           <button
             type="button"
             className="icon-button"
-            data-tauri-drag-region={false}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
-              e.stopPropagation();
-              openConsole();
+              e.stopPropagation()
+              startNewChat()
             }}
+            title="New chat"
           >
-            <Settings size={15} color="rgba(255,255,255,0.7)" />
+            <Plus size={15} color="rgba(255,255,255,0.7)" />
+          </button>
+          <div className="history-menu-wrap" ref={historyRef} data-header-no-drag>
+            <button
+              type="button"
+              className={`icon-button ${showHistory ? 'icon-button--active' : ''}`}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={async (e) => {
+                e.stopPropagation()
+                if (!showHistory) await refreshThreads()
+                setShowHistory((v) => !v)
+              }}
+              title="Chat history"
+            >
+              <History size={15} color="rgba(255,255,255,0.7)" />
+            </button>
+            {showHistory && (
+              <div className="history-dropdown">
+                {threads.length === 0 ? (
+                  <p className="history-dropdown-empty">No chats yet</p>
+                ) : (
+                  threads.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`history-dropdown-item ${activeThreadId === t.id ? 'history-dropdown-item--active' : ''}`}
+                      onClick={() => selectThread(t.id)}
+                    >
+                      <span>{t.name}</span>
+                      <span className="history-dropdown-date">
+                        {formatThreadDate(t.updatedAt)}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className={`icon-button ${isExpanded ? 'icon-button--active' : ''}`}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleExpanded()
+            }}
+            title={isExpanded ? 'Restore size' : 'Expand'}
+          >
+            {isExpanded ? (
+              <Minimize2 size={15} color="rgba(255,255,255,0.9)" />
+            ) : (
+              <Maximize2 size={15} color="rgba(255,255,255,0.7)" />
+            )}
           </button>
         </div>
 
         <div className="chat-body">
-          {(copiedText || copiedImage) && (
-            <div className="context-banner">
-              <div className="context-banner-header">
-                <span className="context-pill">Selected Context</span>
-                <button className="context-clear" onClick={() => { setCopiedText(""); setCopiedImage(""); }}>×</button>
-              </div>
-              {copiedText && <div className="context-banner-text">{copiedText}</div>}
-              {copiedImage && (
-                <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center' }}>
-                  <img
-                    src={convertFileSrc(copiedImage)}
-                    alt="Context"
-                    style={{ maxHeight: '120px', borderRadius: '6px', objectFit: 'contain' }}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="messages-container">
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`message-row ${m.role === "user" ? "user-row" : "assistant-row"}`}
-              >
-                <div className={`message-bubble ${m.role === "user" ? "user-bubble" : "assistant-bubble"}`}>
-                  {m.role === "assistant" ? (
-                    <ReactMarkdown>{m.text}</ReactMarkdown>
-                  ) : (
-                    m.text
-                  )}
-                </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-
-        <div className="chat-footer">
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKey}
-            placeholder="Message…"
-            disabled={chatStatus === 'pending'}
+          <ChatPanel
+            key={chatSessionKey}
+            threadId={activeThreadId}
+            onThreadCreated={setActiveThreadId}
+            onThreadsChanged={refreshThreads}
+            copiedText={copiedText}
+            copiedImage={copiedImage}
+            onClearContext={() => {
+              setCopiedText('')
+              setCopiedImage('')
+            }}
+            showContext
+            targetWindow="main"
+            focusRequest={focusRequest}
+            ghostMessage={ghostMessage}
           />
-          <button
-            className={`send-button ${input.trim() && chatStatus !== 'pending' ? "active" : ""}`}
-            onClick={send}
-            disabled={sendDisabled}
-          >
-            <Send size={13} color="rgba(255,255,255,0.85)" />
-          </button>
         </div>
       </div>
     </div>
-  );
+  )
 }

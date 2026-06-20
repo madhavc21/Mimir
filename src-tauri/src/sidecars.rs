@@ -29,6 +29,7 @@ pub async fn stream_chat(
     history_json: String,
     api_key: String,
     model: String,
+    target_window: String,
 ) -> Result<(), String> {
     let cmd = if is_dev() {
         // Use local venv incase of dev environment
@@ -54,12 +55,13 @@ pub async fn stream_chat(
         .spawn()
         .map_err(|e| e.to_string())?;
 
+    let window_label = target_window;
     tauri::async_runtime::spawn(async move {
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line_bytes) => {
                     let line = String::from_utf8_lossy(&line_bytes);
-                    if let Some(window) = app.get_webview_window("main") {
+                    if let Some(window) = app.get_webview_window(&window_label) {
                         let _ = window.emit("chat-stream-chunk", line.to_string());
                     }
                 }

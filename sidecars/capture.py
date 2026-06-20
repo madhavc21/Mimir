@@ -10,20 +10,20 @@ logger = setup_logger("capture")
 # Resolve the absolute path of the directory containing this script,
 # then get its parent directory (the project root)
 if getattr(sys, "frozen", False):
-    # For compiled .exe
-    root_dir = Path(sys.executable).parent
+    # ponytail: onefile extracts to _MEIPASS, not next to the .exe
+    root_dir = Path(getattr(sys, "_MEIPASS", sys.executable))
 else:
-    # For dev
-    root_dir = Path(__file__).resolve().parent.parent
-    
+    root_dir = Path(__file__).resolve().parent
+
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
-    
+
 try:
     from services.capture_text import get_selected_text
     from services.capture_snippet import capture_selected_bmp
     from services.overlay import OverlayWindow
 except ImportError as e:
+    logger.exception("capture service import failed: %s", e)
     get_selected_text = None
     capture_selected_bmp = None
     

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import ChatPanel from '@/components/ChatPanel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +21,10 @@ import {
   loadSettings,
   saveSettings,
   type AppSettings,
+  type HotkeyOpens,
 } from '@/lib/settings'
+import { formatThreadDate, listThreads, sortThreads, type ThreadMeta } from '@/lib/chats'
+import '@/App.css'
 
 export default function Console() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
@@ -29,10 +33,22 @@ export default function Console() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [hotkeyInput, setHotkeyInput] = useState(DEFAULT_SETTINGS.hotkey)
   const [listenerBusy, setListenerBusy] = useState(false)
+  const [threads, setThreads] = useState<ThreadMeta[]>([])
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
+  const [chatSessionKey, setChatSessionKey] = useState(0)
 
   const refreshListenerStatus = useCallback(async () => {
     const live = await invoke<boolean>('get_listener_status')
     setListenerLive(live)
+  }, [])
+
+  const refreshThreads = useCallback(async () => {
+    try {
+      const list = await listThreads()
+      setThreads(list)
+    } catch (e) {
+      console.error('list_threads failed', e)
+    }
   }, [])
 
   useEffect(() => {
@@ -42,6 +58,7 @@ export default function Console() {
       setApiKeyInput(loaded.geminiApiKey)
       setHotkeyInput(loaded.hotkey)
       await refreshListenerStatus()
+      await refreshThreads()
 
       if (loaded.autostart) {
         try {
@@ -55,7 +72,7 @@ export default function Console() {
       }
     }
     init()
-  }, [refreshListenerStatus])
+  }, [refreshListenerStatus, refreshThreads])
 
   const handleStart = async () => {
     setListenerBusy(true)
@@ -102,13 +119,20 @@ export default function Console() {
     setSettings(next)
   }
 
+  const handleHotkeyOpensChange = async (value: HotkeyOpens) => {
+    const next = await saveSettings({ hotkeyOpens: value })
+    setSettings(next)
+  }
+
   const handleQuit = () => {
     invoke('quit_app')
   }
 
+  const sortedThreads = sortThreads(threads)
+
   return (
     <div className="min-h-screen bg-[#0b0b10] text-foreground p-6">
-      <div className="mx-auto max-w-xl space-y-4">
+      <div className="mx-auto max-w-4xl space-y-4">
         <header className="flex items-center gap-3">
           <img src="/mimir_logo.png" alt="" className="h-8 w-8 object-contain" />
           <div>
@@ -117,9 +141,16 @@ export default function Console() {
           </div>
         </header>
 
-        <Tabs defaultValue="home" onValueChange={(v) => v === 'home' && refreshListenerStatus()}>
+        <Tabs
+          defaultValue="home"
+          onValueChange={(v) => {
+            if (v === 'home') refreshListenerStatus()
+            if (v === 'chats') refreshThreads()
+          }}
+        >
           <TabsList className="w-full">
             <TabsTrigger value="home">Home</TabsTrigger>
+            <TabsTrigger value="chats">Chats</TabsTrigger>
             <TabsTrigger value="api">API Keys</TabsTrigger>
             <TabsTrigger value="model">Model</TabsTrigger>
             <TabsTrigger value="system">System</TabsTrigger>
@@ -176,6 +207,58 @@ export default function Console() {
             </section>
           </TabsContent>
 
+          <TabsContent value="chats" className="pt-2">
+            <div className="console-chats-layout rounded-lg border border-border overflow-hidden">
+              <aside className="console-thread-list">
+                <div className="console-thread-list-header">
+                  <span className="text-sm font-medium">Threads</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedThreadId(null)
+                      setChatSessionKey((k) => k + 1)
+                    }}
+                  >
+                    New
+                  </Button>
+                </div>
+                <div className="console-thread-list-items">
+                  {sortedThreads.length === 0 && (
+                    <p className="console-thread-empty">No chats yet</p>
+                  )}
+                  {sortedThreads.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`console-thread-item ${selectedThreadId === t.id ? 'console-thread-item--active' : ''}`}
+                      onClick={() => setSelectedThreadId(t.id)}
+                    >
+                      <span className="console-thread-name">{t.name}</span>
+                      <span className="console-thread-date">
+                        {formatThreadDate(t.updatedAt)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+              <div className="console-chat-panel">
+                <ChatPanel
+                  key={chatSessionKey}
+                  threadId={selectedThreadId}
+                  onThreadCreated={(id) => {
+                    setSelectedThreadId(id)
+                    refreshThreads()
+                  }}
+                  onThreadsChanged={refreshThreads}
+                  targetWindow="console"
+                  scrollable
+                  className="console-chat-panel-inner"
+                />
+              </div>
+            </div>
+          </TabsContent>
+
           <TabsContent value="api" className="space-y-4 pt-2">
             <div className="space-y-2">
               <Label htmlFor="gemini-key">Gemini API Key</Label>
@@ -229,6 +312,27 @@ export default function Console() {
             <Separator />
 
             <div className="space-y-2">
+              <Label>Hotkey opens</Label>
+              <Select
+                value={settings.hotkeyOpens}
+                onValueChange={(v) => handleHotkeyOpensChange(v as HotkeyOpens)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">New chat</SelectItem>
+                  <SelectItem value="latest">Latest chat</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                What happens when you press the capture hotkey.
+              </p>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
               <Label htmlFor="hotkey">Hotkey</Label>
               <Input
                 id="hotkey"
@@ -251,7 +355,7 @@ export default function Console() {
           </TabsContent>
 
           <TabsContent value="about" className="space-y-2 pt-2">
-            <p className="text-sm">Mimir v0.1.0</p>
+            <p className="text-sm">Mimir v0.2.0</p>
             <p className="text-sm text-muted-foreground">
               A desktop assistant that appears on demand. Highlight text, press your hotkey,
               and ask.
