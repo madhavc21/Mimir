@@ -227,7 +227,7 @@ export default function App() {
             title="Go to console"
           >
             <img src="/mimir_logo.png" alt="" className="header-logo" />
-            <span className="header-title">Mimir</span>
+            <span className="header-title">ᛗᛁᛗᛁᚱ</span>
           </button>
           <div className="chat-header-spacer" aria-hidden="true" />
           <button

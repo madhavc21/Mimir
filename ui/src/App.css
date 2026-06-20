@@ -63,15 +63,15 @@
 }
 
 .header-logo {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
+  width: 25px;
+  height: 25px;
+  object-fit: fill;
   flex-shrink: 0;
 }
 
 .header-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 15;
+  font-weight: 0;
   color: #c084fc;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -119,6 +119,10 @@
 
 .history-menu-wrap {
   position: relative;
+  display: flex;
+  align-items: center;
+  align-self: center;
+  flex-shrink: 0;
 }
 
 .history-dropdown {
@@ -193,6 +197,47 @@
   15% { opacity: 1; }
   85% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* Console shell */
+.console-page {
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.console-inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.console-tabs {
+  flex: 1;
+  min-height: 0;
+}
+
+.console-tab-scroll {
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.console-tab-scroll--fill {
+  display: flex;
+  flex-direction: column;
+}
+
+.console-tab-scroll--fill .console-chats-layout {
+  flex: 1;
+  min-height: 360px;
+  height: auto;
+  max-height: none;
 }
 
 /* Console chats tab */
@@ -600,4 +645,179 @@
   font-size: 10px;
   color: rgba(255, 255, 255, 0.35);
   margin-left: 2px;
+}
+
+/* Console feature guide */
+.feature-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.feature-guide-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.feature-guide-heading {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.feature-guide-lead {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.45;
+}
+
+.feature-guide-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.62);
+  line-height: 1.55;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.feature-guide-list strong {
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 500;
+}
+
+.feature-guide-list kbd,
+.guide-legend kbd {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 0.75rem;
+  font-family: inherit;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.guide-preview-wrap {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .guide-preview-wrap {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.guide-preview-card {
+  max-width: 320px;
+  pointer-events: none;
+  user-select: none;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.guide-preview-header-block {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+  flex-shrink: 0;
+}
+
+.guide-header-mock {
+  cursor: default;
+  border-bottom: none;
+}
+
+.guide-header-hint {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 12px 7px;
+  border-top: 1px dashed rgba(192, 132, 252, 0.28);
+  background: rgba(192, 132, 252, 0.08);
+  font-size: 10px;
+  color: rgba(196, 181, 253, 0.92);
+  white-space: nowrap;
+}
+
+.guide-mock-brand {
+  cursor: default;
+}
+
+.guide-mock-icon {
+  cursor: default;
+  pointer-events: none;
+}
+
+.guide-preview-body {
+  position: relative;
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.guide-preview-watermark {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.06);
+  letter-spacing: 0.04em;
+}
+
+.guide-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.guide-legend-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.62);
+  line-height: 1.45;
+}
+
+.guide-legend-item strong {
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 500;
+}
+
+.guide-legend-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.guide-legend-icon--brand img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.guide-legend-icon--gesture {
+  background: rgba(192, 132, 252, 0.08);
+  border-color: rgba(192, 132, 252, 0.2);
+}
+
+.feature-guide--compact .feature-guide-section {
+  gap: 0.35rem;
 }

@@ -24,6 +24,7 @@ import {
   type HotkeyOpens,
 } from '@/lib/settings'
 import { formatThreadDate, listThreads, sortThreads, type ThreadMeta } from '@/lib/chats'
+import FeatureGuide from '@/components/FeatureGuide'
 import '@/App.css'
 
 export default function Console() {
@@ -131,17 +132,18 @@ export default function Console() {
   const sortedThreads = sortThreads(threads)
 
   return (
-    <div className="min-h-screen bg-[#0b0b10] text-foreground p-6">
-      <div className="mx-auto max-w-4xl space-y-4">
-        <header className="flex items-center gap-3">
-          <img src="/mimir_logo.png" alt="" className="h-8 w-8 object-contain" />
+    <div className="console-page bg-[#0b0b10] text-foreground p-6">
+      <div className="console-inner mx-auto max-w-4xl space-y-4">
+        <header className="flex shrink-0 items-center gap-3">
+          <img src="/mimir_logo.png" alt="" className="h-15 w-15 object-contain" />
           <div>
-            <h1 className="text-xl font-semibold">Mimir</h1>
+            <h1 className="text-xl font-semibold">ᛗᛁᛗᛁᚱ</h1>
             <p className="text-sm text-muted-foreground">Console</p>
           </div>
         </header>
 
         <Tabs
+          className="console-tabs"
           defaultValue="home"
           onValueChange={(v) => {
             if (v === 'home') refreshListenerStatus()
@@ -157,7 +159,7 @@ export default function Console() {
             <TabsTrigger value="about">About</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="home" className="space-y-4 pt-2">
+          <TabsContent value="home" className="console-tab-scroll space-y-4 pt-2">
             <section className="rounded-lg border border-border p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -197,17 +199,24 @@ export default function Console() {
               <Badge variant="outline">Model: {settings.geminiModel}</Badge>
             </section>
 
-            <section className="text-sm text-muted-foreground space-y-2">
-              <p className="font-medium text-foreground">How to use</p>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>Set your Gemini API key in the API Keys tab.</li>
-                <li>Select text anywhere, press {settings.hotkey}.</li>
-                <li>Ask Mimir about the captured context.</li>
+            <section className="rounded-lg border border-border p-4 space-y-2">
+              <p className="text-sm font-medium">Getting started</p>
+              <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
+                <li>Add your Gemini API key in the API Keys tab.</li>
+                <li>
+                  Press <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted/30 text-xs">{settings.hotkey}</kbd>{' '}
+                  with text selected, or draw a region if nothing is highlighted.
+                </li>
+                <li>Ask a question — context is attached automatically.</li>
               </ol>
+            </section>
+
+            <section className="rounded-lg border border-border p-4">
+              <FeatureGuide hotkey={settings.hotkey} />
             </section>
           </TabsContent>
 
-          <TabsContent value="chats" className="pt-2">
+          <TabsContent value="chats" className="console-tab-scroll console-tab-scroll--fill pt-2">
             <div className="console-chats-layout rounded-lg border border-border overflow-hidden">
               <aside className="console-thread-list">
                 <div className="console-thread-list-header">
@@ -259,7 +268,7 @@ export default function Console() {
             </div>
           </TabsContent>
 
-          <TabsContent value="api" className="space-y-4 pt-2">
+          <TabsContent value="api" className="console-tab-scroll space-y-4 pt-2">
             <div className="space-y-2">
               <Label htmlFor="gemini-key">Gemini API Key</Label>
               <div className="flex gap-2">
@@ -279,7 +288,7 @@ export default function Console() {
             </div>
           </TabsContent>
 
-          <TabsContent value="model" className="space-y-4 pt-2">
+          <TabsContent value="model" className="console-tab-scroll space-y-4 pt-2">
             <div className="space-y-2">
               <Label>Gemini model</Label>
               <Select value={settings.geminiModel} onValueChange={handleModelChange}>
@@ -297,7 +306,7 @@ export default function Console() {
             </div>
           </TabsContent>
 
-          <TabsContent value="system" className="space-y-4 pt-2">
+          <TabsContent value="system" className="console-tab-scroll space-y-4 pt-2">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Run on startup</Label>
@@ -354,12 +363,14 @@ export default function Console() {
             </Button>
           </TabsContent>
 
-          <TabsContent value="about" className="space-y-2 pt-2">
-            <p className="text-sm">Mimir v0.2.0</p>
-            <p className="text-sm text-muted-foreground">
-              A desktop assistant that appears on demand. Highlight text, press your hotkey,
-              and ask.
-            </p>
+          <TabsContent value="about" className="console-tab-scroll space-y-4 pt-2">
+            <div>
+              <p className="text-sm font-medium">Mimir v0.2.1</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                A desktop assistant that appears on demand. Highlight text or draw a region,
+                press your hotkey, and ask.
+              </p>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
