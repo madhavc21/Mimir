@@ -1,29 +1,32 @@
 <p align="center">
-  <img src="ui/public/mimir_logo.png" alt="Mimir" width="160" />
+  <span style="display: inline-flex; align-items: center; gap: 20px;">
+    <img src="ui/public/mimir_logo.png" alt="Mimir" width="120" height="120" />
+    <span style="font-size: 5rem; line-height: 1; color: #c084fc; letter-spacing: 0.05em;">ᛗᛁᛗᛁᚱ</span>
+  </span>
 </p>
 
-# Mimir
+Mimir is a Windows desktop assistant built with **Tauri**, **React/TypeScript**, and **Python sidecars** that talk to **Gemini** through LiteLLM.
 
-Mimir is an ultra-fast, context-aware AI desktop assistant built with **Tauri v2**, **React/TypeScript**, and a **Python-based LLM sidecar** running **Gemini** (via LiteLLM).
-
-It stays in the background until you press a global hotkey, then springs to life instantly at your cursor.
+Press a global hotkey from whatever app you're in, grab context from the screen, and ask about it in a small floating chat window. Works on selected text or anything visible — code, docs, error dialogs, charts, PDFs, browser pages.
 
 ---
 
-## Key Features
+## What it does
 
-*   **Global Hotkey Hook**: Trigger the assistant instantly from any app using `Ctrl+Shift+E`.
-*   **Context-Aware Triggers**:
-    *   If you have text selected on your screen when pressing the hotkey, Mimir automatically captures and inputs it as context.
-    *   If no text is selected, Mimir triggers a custom cross-process **screen capture crop overlay** allowing you to draw a box around anything on your screen (code, graphs, error messages) and ask questions about it.
-*   **Dual-window architecture**: **Console** (config hub) + **Chat card** (ephemeral overlay).
-*   **Glassmorphism Theme**: Native Windows Acrylic blurred dark chat UI.
-*   **Real-time Streaming**: Instant token-by-token streaming via low-latency Rust-to-Python stdout pipelines.
-*   **Ephemeral Memory**: Chat history resets when you click away to keep sessions clean and token-efficient.
+* **Global hotkey** (`Ctrl+Shift+E` by default) — opens the chat card at your cursor while the listener is live.
+* **Ask about what's on screen** — Mimir pulls context from your desktop before you type:
+  * **Text selected** — the highlight is sent as chat context.
+  * **Nothing selected** — a screen overlay lets you drag a box around any region; that snippet goes into the chat (vision model reads the image).
+  * You stay in the app you were using; no copy-paste or screenshot folder workflow.
+* **Chat card** — frameless overlay for the conversation.
+* **Console** — settings, API keys, live/sleep toggle, and chat history.
+* **Chat threads** — saved locally on disk; browse and reopen them from the Console or the card's history menu.
+
+Click outside the chat card to dismiss it (unless locked). That clears the in-memory session on the card; saved threads are unchanged.
 
 ---
 
-## Architecture Overview
+## How it's put together
 
 ```text
 [Console UI]  console.html  →  settings, live/sleep, quit
@@ -37,13 +40,13 @@ It stays in the background until you press a global hotkey, then springs to life
        │ │  Shell plugin spawn + event stream
        ▼ │
 [Python Sidecars] (Dev: .venv | Prod: Standalone .exe)
-  ├── capture  (Text & screen snippet capture)
-  └── chat     (LiteLLM Gemini vision streaming)
+  ├── capture  (text + screen region capture)
+  └── chat     (LiteLLM Gemini streaming)
 ```
 
-- **UI (`ui/`)**: Two Vite entrypoints — Console hub and Chat card satellite.
-- **Rust Core (`src-tauri/`)**: Hotkeys, window management, settings reads, sidecar spawn.
-- **Python Sidecars (`sidecars/`)**: OS capture integrations and LLM streaming.
+- **UI (`ui/`)** — two Vite entrypoints: Console and chat card.
+- **Rust (`src-tauri/`)** — hotkeys, window management, settings, sidecar spawn, thread storage.
+- **Python (`sidecars/`)** — OS capture helpers and LLM streaming.
 
 ---
 
@@ -83,8 +86,6 @@ npm run dev
 Console opens on launch. Press `Ctrl+Shift+E` (while **Live**) to open the chat card at your cursor.
 
 ---
-
-## 📦 Production Build
 
 ## Production Build
 
