@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri::{Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_store::StoreExt;
@@ -10,14 +10,27 @@ mod sidecars;
 mod stream;
 mod chats;
 mod settings;
+mod hotkey;
+mod models;
 
-#[cfg(target_os = "windows")]
-use window_vibrancy::apply_acrylic;
+/// Undecorated transparent overlay: OS shadow + acrylic are HWND-level and square;
+/// CSS border-radius only clips the webview — mismatch shows at corners (tauri #9287).
+fn configure_overlay_window(window: &tauri::WebviewWindow) {
+    let _ = window.set_shadow(false);
+}
 
 pub struct ListenerState {
     pub active: AtomicBool,
     pub capture_busy: AtomicBool,
-    pub shortcut: Shortcut,
+    pub shortcut: Mutex<Shortcut>,
+}
+
+fn current_shortcut(state: &ListenerState) -> Result<Shortcut, String> {
+    state
+        .shortcut
+        .lock()
+        .map_err(|e| e.to_string())
+        .map(|s| *s)
 }
 
 pub struct CardState {
@@ -36,6 +49,18 @@ struct WindowGeometry {
 
 const DEFAULT_CARD_WIDTH: f64 = 260.0;
 const DEFAULT_CARD_HEIGHT: f64 = 380.0;
+
+fn window_geometry_logical(window: &tauri::WebviewWindow) -> Result<WindowGeometry, String> {
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let size = window.outer_size().map_err(|e| e.to_string())?;
+    let pos = window.outer_position().map_err(|e| e.to_string())?;
+    Ok(WindowGeometry {
+        width: size.width as f64 / scale,
+        height: size.height as f64 / scale,
+        x: pos.x,
+        y: pos.y,
+    })
+}
 
 fn reset_card_session(app: &tauri::AppHandle, window: Option<&tauri::Window>) {
     let card = app.state::<CardState>();
@@ -73,13 +98,11 @@ fn ensure_main_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow, St
         .always_on_top(true)
         .maximizable(false)
         .visible(false)
+        .shadow(true)
         .build()
         .map_err(|e| e.to_string())?;
 
-    #[cfg(target_os = "windows")]
-    {
-        let _ = apply_acrylic(&window, Some((15, 15, 22, 80)));
-    }
+    configure_overlay_window(&window);
 
     Ok(window)
 }
@@ -123,9 +146,10 @@ fn start_listener(app: tauri::AppHandle, state: State<'_, ListenerState>) -> Res
     if state.active.load(Ordering::SeqCst) {
         return Ok(true);
     }
+    let shortcut = current_shortcut(&state)?;
     app.global_shortcut()
-        .register(state.shortcut.clone())
-        .map_err(|e| e.to_string())?;
+        .register(shortcut)
+        .map_err(hotkey::registration_error_message)?;
     state.active.store(true, Ordering::SeqCst);
     Ok(true)
 }
@@ -135,11 +159,49 @@ fn stop_listener(app: tauri::AppHandle, state: State<'_, ListenerState>) -> Resu
     if !state.active.load(Ordering::SeqCst) {
         return Ok(false);
     }
+    let shortcut = current_shortcut(&state)?;
     app.global_shortcut()
-        .unregister(state.shortcut.clone())
+        .unregister(shortcut)
         .map_err(|e| e.to_string())?;
     state.active.store(false, Ordering::SeqCst);
     Ok(false)
+}
+
+#[tauri::command]
+fn set_hotkey(
+    app: tauri::AppHandle,
+    state: State<'_, ListenerState>,
+    hotkey: String,
+) -> Result<(), String> {
+    let new_shortcut = hotkey::parse_hotkey(&hotkey)?;
+    let old_shortcut = current_shortcut(&state)?;
+    let active = state.active.load(Ordering::SeqCst);
+
+    // ponytail: no Windows API to list global hotkeys — probe via RegisterHotKey (std path).
+    let skip_probe = active && new_shortcut == old_shortcut;
+    if !skip_probe {
+        app.global_shortcut()
+            .register(new_shortcut)
+            .map_err(hotkey::registration_error_message)?;
+        app.global_shortcut()
+            .unregister(new_shortcut)
+            .map_err(|e| format!("Failed to release shortcut probe: {e}"))?;
+    }
+
+    if active && new_shortcut != old_shortcut {
+        let _ = app.global_shortcut().unregister(old_shortcut);
+        if let Err(e) = app.global_shortcut().register(new_shortcut) {
+            let _ = app.global_shortcut().register(old_shortcut);
+            return Err(hotkey::registration_error_message(e));
+        }
+    }
+
+    *state
+        .shortcut
+        .lock()
+        .map_err(|e| e.to_string())? = new_shortcut;
+    hotkey::save_hotkey_to_store(&app, &hotkey)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -195,18 +257,8 @@ fn toggle_card_expanded(
     let expanding = !state.expanded.load(Ordering::SeqCst);
 
     if expanding {
-        let size = window
-            .outer_size()
-            .map_err(|e| e.to_string())?;
-        let pos = window
-            .outer_position()
-            .map_err(|e| e.to_string())?;
-        *state.normal_geometry.lock().map_err(|e| e.to_string())? = Some(WindowGeometry {
-            width: size.width as f64,
-            height: size.height as f64,
-            x: pos.x,
-            y: pos.y,
-        });
+        *state.normal_geometry.lock().map_err(|e| e.to_string())? =
+            Some(window_geometry_logical(&window)?);
 
         let monitor = window
             .current_monitor()
@@ -309,8 +361,6 @@ async fn handle_hotkey_capture(app: tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyE);
-
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -381,7 +431,9 @@ pub fn run() {
         .manage(ListenerState {
             active: AtomicBool::new(true),
             capture_busy: AtomicBool::new(false),
-            shortcut: shortcut.clone(),
+            shortcut: Mutex::new(
+                hotkey::parse_hotkey(hotkey::DEFAULT_HOTKEY).expect("default hotkey must parse"),
+            ),
         })
         .manage(CardState {
             locked: AtomicBool::new(false),
@@ -394,19 +446,21 @@ pub fn run() {
             chats::load_thread,
             chats::create_thread,
             chats::save_thread_messages,
-            settings::get_api_key,
+            models::list_providers,
+            models::list_models,
             open_console,
             quit_app,
             get_listener_status,
             start_listener,
             stop_listener,
+            set_hotkey,
             set_autostart,
             is_autostart_enabled,
             set_card_locked,
             get_card_state,
             toggle_card_expanded,
         ])
-        .setup(move |app| {
+        .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -415,12 +469,16 @@ pub fn run() {
                 )?;
             }
 
+            let shortcut = hotkey::load_hotkey_from_store(app.handle())?;
+            *app
+                .state::<ListenerState>()
+                .shortcut
+                .lock()
+                .map_err(|e| e.to_string())? = shortcut;
             let _ = app.global_shortcut().register(shortcut);
 
-            #[cfg(target_os = "windows")]
-            {
-                let window = app.get_webview_window("main").unwrap();
-                let _ = apply_acrylic(&window, Some((15, 15, 22, 80)));
+            if let Some(window) = app.get_webview_window("main") {
+                configure_overlay_window(&window);
             }
 
             Ok(())

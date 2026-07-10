@@ -90,6 +90,10 @@ def main():
         snippets_dir.mkdir(exist_ok=True)
         save_path = str(snippets_dir / f"capture_{int(time.time())}.png")
         capture_selected_bmp(x,y,w,h, save=True, save_name=save_path)
+        # ponytail: SaveBitmapFile writes BMP; re-encode so path + API mime match
+        from PIL import Image
+        with Image.open(save_path) as img:
+            img.convert("RGB").save(save_path, format="PNG")
         print(json.dumps({"status": "success", "type":"image", "result": save_path}))
         
         return   

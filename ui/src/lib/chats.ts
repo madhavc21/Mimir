@@ -1,8 +1,11 @@
 import { invoke } from '@tauri-apps/api/core'
 
+export const CHAT_NAME_MAX_LEN = 40
+
 export interface ThreadMeta {
   id: string
   name: string
+  thumbnailPath?: string
   createdAt: string
   updatedAt: string
 }
@@ -26,8 +29,22 @@ export async function loadThread(id: string): Promise<Thread> {
   return invoke<Thread>('load_thread', { id })
 }
 
-export async function createThread(): Promise<ThreadMeta> {
-  return invoke<ThreadMeta>('create_thread')
+/** Name from first copied text only — image-only threads keep the default chat-N name. */
+export function threadNameFromContext(text: string): string | undefined {
+  const trimmed = text.replace(/\s+/g, ' ').trim()
+  if (!trimmed) return undefined
+  if (trimmed.length <= CHAT_NAME_MAX_LEN) return trimmed
+  return `${trimmed.slice(0, CHAT_NAME_MAX_LEN).trimEnd()}…`
+}
+
+export async function createThread(opts?: {
+  name?: string
+  thumbnailPath?: string
+}): Promise<ThreadMeta> {
+  return invoke<ThreadMeta>('create_thread', {
+    name: opts?.name ?? null,
+    thumbnailPath: opts?.thumbnailPath ?? null,
+  })
 }
 
 export async function saveThreadMessages(

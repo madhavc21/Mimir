@@ -85,7 +85,7 @@ export default function FeatureGuide({ hotkey, compact = false }: FeatureGuidePr
                 <Plus size={14} color="rgba(255,255,255,0.75)" />
               </span>
               <span>
-                <strong>New chat</strong> — fresh thread, keeps capture context if present.
+                <strong>New chat</strong> — fresh chat, keeps capture context if present.
               </span>
             </li>
             <li className="guide-legend-item">
@@ -93,7 +93,7 @@ export default function FeatureGuide({ hotkey, compact = false }: FeatureGuidePr
                 <History size={14} color="rgba(255,255,255,0.9)" />
               </span>
               <span>
-                <strong>History</strong> — pick a recent thread from the dropdown.
+                <strong>History</strong> — resume old chats from the dropdown.
               </span>
             </li>
             <li className="guide-legend-item">
@@ -101,7 +101,7 @@ export default function FeatureGuide({ hotkey, compact = false }: FeatureGuidePr
                 <Maximize2 size={14} color="rgba(255,255,255,0.75)" />
               </span>
               <span>
-                <strong>Expand</strong> — fill the current monitor; click again to restore size.
+                <strong>Expand</strong> — full screen; click again to restore size.
               </span>
             </li>
             <li className="guide-legend-item">
@@ -110,7 +110,7 @@ export default function FeatureGuide({ hotkey, compact = false }: FeatureGuidePr
               </span>
               <span>
                 <strong>Drag</strong> the header to move. <strong>Double-click</strong> to lock —
-                card stays open and on top until you unlock.
+                card stays open and on top. Double click again to unlock.
               </span>
             </li>
           </ul>
