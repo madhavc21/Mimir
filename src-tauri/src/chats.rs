@@ -9,6 +9,8 @@ use tauri::Manager;
 pub struct ThreadMeta {
     pub id: String,
     pub name: String,
+    #[serde(rename = "thumbnailPath", default, skip_serializing_if = "Option::is_none")]
+    pub thumbnail_path: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: String,
     #[serde(rename = "updatedAt")]
@@ -29,6 +31,8 @@ pub struct StoredMessage {
 pub struct Thread {
     pub id: String,
     pub name: String,
+    #[serde(rename = "thumbnailPath", default, skip_serializing_if = "Option::is_none")]
+    pub thumbnail_path: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: String,
     #[serde(rename = "updatedAt")]
@@ -115,6 +119,7 @@ pub fn load_thread(app: AppHandle, id: String) -> Result<Thread, String> {
     Ok(Thread {
         id: meta.id,
         name: meta.name,
+        thumbnail_path: meta.thumbnail_path,
         created_at: meta.created_at,
         updated_at: meta.updated_at,
         messages: file.messages,
@@ -122,15 +127,27 @@ pub fn load_thread(app: AppHandle, id: String) -> Result<Thread, String> {
 }
 
 #[tauri::command]
-pub fn create_thread(app: AppHandle) -> Result<ThreadMeta, String> {
+pub fn create_thread(
+    app: AppHandle,
+    name: Option<String>,
+    thumbnail_path: Option<String>,
+) -> Result<ThreadMeta, String> {
     let dir = chats_dir(&app)?;
     let mut index = read_index(&dir)?;
 
     index.next_chat_num += 1;
     let now = now_ms();
+    let display_name = name
+        .map(|n| n.trim().to_string())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| format!("chat-{}", index.next_chat_num));
+    let thumb = thumbnail_path
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty());
     let meta = ThreadMeta {
         id: new_id(),
-        name: format!("chat-{}", index.next_chat_num),
+        name: display_name,
+        thumbnail_path: thumb,
         created_at: now.clone(),
         updated_at: now,
     };

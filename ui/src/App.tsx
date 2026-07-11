@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus, History, Maximize2, Minimize2 } from 'lucide-react'
 import { listen } from '@tauri-apps/api/event'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke, convertFileSrc } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import ChatPanel from '@/components/ChatPanel'
 import {
@@ -224,7 +224,8 @@ export default function App() {
               e.stopPropagation()
               openConsole()
             }}
-            title="Go to console"
+            title="Open Console"
+            aria-label="Open Console"
           >
             <img src="/mimir_logo.png" alt="" className="header-logo" />
             <span className="header-title">ᛗᛁᛗᛁᚱ</span>
@@ -239,8 +240,9 @@ export default function App() {
               startNewChat()
             }}
             title="New chat"
+            aria-label="New chat"
           >
-            <Plus size={15} color="rgba(255,255,255,0.7)" />
+            <Plus size={15} strokeWidth={2} />
           </button>
           <div className="history-menu-wrap" ref={historyRef} data-header-no-drag>
             <button
@@ -253,8 +255,10 @@ export default function App() {
                 setShowHistory((v) => !v)
               }}
               title="Chat history"
+              aria-label="Chat history"
+              aria-expanded={showHistory}
             >
-              <History size={15} color="rgba(255,255,255,0.7)" />
+              <History size={15} strokeWidth={2} />
             </button>
             {showHistory && (
               <div className="history-dropdown">
@@ -268,9 +272,18 @@ export default function App() {
                       className={`history-dropdown-item ${activeThreadId === t.id ? 'history-dropdown-item--active' : ''}`}
                       onClick={() => selectThread(t.id)}
                     >
-                      <span>{t.name}</span>
-                      <span className="history-dropdown-date">
-                        {formatThreadDate(t.updatedAt)}
+                      {t.thumbnailPath && (
+                        <img
+                          src={convertFileSrc(t.thumbnailPath)}
+                          alt=""
+                          className="thread-thumb"
+                        />
+                      )}
+                      <span className="history-dropdown-item-body">
+                        <span className="history-dropdown-name">{t.name}</span>
+                        <span className="history-dropdown-date">
+                          {formatThreadDate(t.updatedAt)}
+                        </span>
                       </span>
                     </button>
                   ))
@@ -286,12 +299,13 @@ export default function App() {
               e.stopPropagation()
               toggleExpanded()
             }}
-            title={isExpanded ? 'Restore size' : 'Expand'}
+            title={isExpanded ? 'Restore size' : 'Expand to monitor'}
+            aria-label={isExpanded ? 'Restore size' : 'Expand to monitor'}
           >
             {isExpanded ? (
-              <Minimize2 size={15} color="rgba(255,255,255,0.9)" />
+              <Minimize2 size={15} strokeWidth={2} />
             ) : (
-              <Maximize2 size={15} color="rgba(255,255,255,0.7)" />
+              <Maximize2 size={15} strokeWidth={2} />
             )}
           </button>
         </div>

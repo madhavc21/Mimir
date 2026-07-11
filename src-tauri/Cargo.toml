@@ -1,10 +1,10 @@
 [package]
 name = "app"
-version = "0.2.1"
+version = "1.0.0"
 description = "Mimir desktop assistant"
-authors = ["you"]
-license = ""
-repository = ""
+authors = ["madhavc2111@gmail.com"]
+license = "Apache-2.0"
+repository = "https://github.com/madhavc21/Mimir"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -24,7 +24,6 @@ log = "0.4"
 tauri = { version = "2.11.1", features = ["protocol-asset"] }
 tauri-plugin-log = "2"
 tauri-plugin-global-shortcut = "2"
-window-vibrancy = "0.7"
 tauri-plugin-store = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-autostart = "2"

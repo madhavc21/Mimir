@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Mimir",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "identifier": "com.madhavc21.buddy",
-  "build": {
+  "build": {  
     "frontendDist": "../ui/dist",
     "beforeDevCommand": "npm --prefix ui run dev",
     "beforeBuildCommand": "npm --prefix ui run build",
@@ -34,7 +34,8 @@
         "visible": false,
         "decorations": false,
         "alwaysOnTop": true,
-        "transparent": true
+        "transparent": true,
+        "shadow": true
       }
     ],
     "security": {

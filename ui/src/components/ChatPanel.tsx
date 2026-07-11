@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Send } from 'lucide-react'
+import { ChevronDown, ChevronUp, Send } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { listen } from '@tauri-apps/api/event'
 import { invoke, convertFileSrc } from '@tauri-apps/api/core'
@@ -7,6 +7,7 @@ import {
   createThread,
   loadThread,
   saveThreadMessages,
+  threadNameFromContext,
   type StoredMessage,
 } from '@/lib/chats'
 import '../App.css'
@@ -18,6 +19,20 @@ interface Message {
 }
 
 type ChatStatus = 'idle' | 'pending' | 'streaming'
+
+const STREAM_IDLE_MS = 600
+const CONTEXT_PREVIEW_LEN = 32
+
+function contextPreview(text: string, image: string): string {
+  const trimmed = text.replace(/\s+/g, ' ').trim()
+  if (trimmed) {
+    return trimmed.length <= CONTEXT_PREVIEW_LEN
+      ? trimmed
+      : `${trimmed.slice(0, CONTEXT_PREVIEW_LEN).trimEnd()}…`
+  }
+  if (image) return 'Screenshot'
+  return 'Context'
+}
 
 export interface ChatPanelProps {
   threadId: string | null
@@ -69,11 +84,14 @@ export default function ChatPanel({
   focusRequest = 0,
   className = '',
   ghostMessage = null,
-  scrollable = false,
+  scrollable: _scrollable = false,
 }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [chatStatus, setChatStatus] = useState<ChatStatus>('idle')
+  const [contextMinimized, setContextMinimized] = useState(false)
+
+  const hasContext = Boolean(copiedText || copiedImage)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -83,6 +101,26 @@ export default function ChatPanel({
   const pendingSaveThreadRef = useRef<string | null>(null)
   const lastImagePathRef = useRef<string | undefined>(undefined)
   const autoScrollRef = useRef(true)
+  const streamIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearStreamIdleTimer = () => {
+    if (streamIdleTimerRef.current) {
+      clearTimeout(streamIdleTimerRef.current)
+      streamIdleTimerRef.current = null
+    }
+  }
+
+  const scheduleStreamEnd = () => {
+    clearStreamIdleTimer()
+    streamIdleTimerRef.current = setTimeout(() => {
+      streamIdleTimerRef.current = null
+      setChatStatus('idle')
+    }, STREAM_IDLE_MS)
+  }
+
+  useEffect(() => {
+    if (hasContext) setContextMinimized(false)
+  }, [copiedText, copiedImage])
 
   useEffect(() => {
     if (threadId !== null && threadId === justCreatedRef.current) {
@@ -124,17 +162,38 @@ export default function ChatPanel({
   useEffect(() => {
     const unlistenChunk = listen<string>('chat-stream-chunk', (event) => {
       try {
-        const payload = JSON.parse(event.payload)
-        if (payload.token) {
+        const payload = JSON.parse(event.payload) as {
+          token?: string
+          status?: string
+          message?: string
+        }
+
+        if (payload.status === 'error') {
+          clearStreamIdleTimer()
+          const errText = payload.message ?? 'Stream error'
+          setMessages((prev) => {
+            const newMsgs = [...prev]
+            const lastMsg = newMsgs[newMsgs.length - 1]
+            if (lastMsg?.role === 'assistant') {
+              lastMsg.text = errText
+            }
+            return newMsgs
+          })
+          setChatStatus('idle')
+          return
+        }
+
+        if (payload.token !== undefined) {
           setChatStatus('streaming')
           setMessages((prev) => {
             const newMsgs = [...prev]
             const lastMsg = newMsgs[newMsgs.length - 1]
-            if (lastMsg && lastMsg.role === 'assistant') {
-              lastMsg.text = payload.token
+            if (lastMsg?.role === 'assistant') {
+              lastMsg.text = payload.token!
             }
             return newMsgs
           })
+          scheduleStreamEnd()
         }
       } catch (e) {
         console.error('Failed to parse chunk', e)
@@ -142,6 +201,7 @@ export default function ChatPanel({
     })
 
     return () => {
+      clearStreamIdleTimer()
       unlistenChunk.then((unlisten) => unlisten())
     }
   }, [])
@@ -155,13 +215,17 @@ export default function ChatPanel({
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     autoScrollRef.current = distanceFromBottom < 48
+    if (hasContext && !contextMinimized) setContextMinimized(true)
   }
 
   useEffect(() => {
+    if (chatStatus === 'pending' || chatStatus === 'streaming') {
+      if (hasContext) setContextMinimized(true)
+    }
     if (autoScrollRef.current || chatStatus === 'streaming' || chatStatus === 'pending') {
       scrollToBottom(chatStatus === 'streaming' ? 'auto' : 'smooth')
     }
-  }, [messages, chatStatus])
+  }, [messages, chatStatus, hasContext])
 
   useEffect(() => {
     if (focusRequest > 0) {
@@ -170,7 +234,7 @@ export default function ChatPanel({
   }, [focusRequest])
 
   useEffect(() => {
-    if (!dirtyRef.current || chatStatus === 'pending') return
+    if (!dirtyRef.current || chatStatus === 'pending' || chatStatus === 'streaming') return
     const saveId = pendingSaveThreadRef.current ?? threadId
     if (!saveId || messages.length === 0) return
 
@@ -198,7 +262,7 @@ export default function ChatPanel({
 
   const send = async () => {
     const text = input.trim()
-    if (!text || chatStatus === 'pending') return
+    if (!text || chatStatus === 'pending' || chatStatus === 'streaming') return
 
     const formattedPrompt = copiedText || copiedImage
       ? `Highlighted Text: ${copiedText}\n\nquestion:\n${text}`
@@ -212,6 +276,7 @@ export default function ChatPanel({
       content: m.text,
     }))
 
+    clearStreamIdleTimer()
     autoScrollRef.current = true
     setMessages((prev) => [...prev, userMsg, placeholderMsg])
     setInput('')
@@ -223,7 +288,11 @@ export default function ChatPanel({
 
     try {
       if (!resolvedThreadId) {
-        const created = await createThread()
+        const isFirstSend = messages.length === 0
+        const created = await createThread({
+          name: isFirstSend ? threadNameFromContext(copiedText) : undefined,
+          thumbnailPath: isFirstSend && copiedImage ? copiedImage : undefined,
+        })
         resolvedThreadId = created.id
         justCreatedRef.current = created.id
         pendingSaveThreadRef.current = created.id
@@ -238,9 +307,8 @@ export default function ChatPanel({
         history: historyForLlm,
         targetWindow,
       })
-
-      setChatStatus('idle')
     } catch (e) {
+      clearStreamIdleTimer()
       const errMsg = e instanceof Error ? e.message : String(e)
       setMessages((prev) => {
         const newMsgs = [...prev]
@@ -261,30 +329,55 @@ export default function ChatPanel({
     }
   }
 
-  const sendDisabled = !input.trim() || chatStatus === 'pending'
+  const isStreaming = chatStatus === 'pending' || chatStatus === 'streaming'
+  const sendDisabled = !input.trim() || isStreaming
   const isDraft = threadId === null && messages.length === 0
 
   return (
     <div className={`chat-panel ${className}`.trim()}>
-      {showContext && (copiedText || copiedImage) && (
-        <div className="context-banner">
+      {showContext && hasContext && (
+        <div className={`context-banner ${contextMinimized ? 'context-banner--minimized' : ''}`}>
           <div className="context-banner-header">
-            <span className="context-pill">Selected Context</span>
+            <button
+              type="button"
+              className="context-toggle"
+              onClick={() => setContextMinimized((v) => !v)}
+              aria-expanded={!contextMinimized}
+            >
+              {contextMinimized ? (
+                <ChevronDown size={12} strokeWidth={2.5} aria-hidden />
+              ) : (
+                <ChevronUp size={12} strokeWidth={2.5} aria-hidden />
+              )}
+              <span className="context-pill">Context</span>
+              {contextMinimized && (
+                <span className="context-preview">{contextPreview(copiedText, copiedImage)}</span>
+              )}
+              {contextMinimized && copiedImage && (
+                <img
+                  src={convertFileSrc(copiedImage)}
+                  alt=""
+                  className="context-thumb-mini"
+                />
+              )}
+            </button>
             <button
               type="button"
               className="context-clear"
               onClick={onClearContext}
+              aria-label="Clear context"
             >
               ×
             </button>
           </div>
-          {copiedText && <div className="context-banner-text">{copiedText}</div>}
-          {copiedImage && (
-            <div className="context-banner-image">
-              <img
-                src={convertFileSrc(copiedImage)}
-                alt="Context"
-              />
+          {!contextMinimized && (
+            <div className="context-banner-body">
+              {copiedText && <div className="context-banner-text">{copiedText}</div>}
+              {copiedImage && (
+                <div className="context-banner-image">
+                  <img src={convertFileSrc(copiedImage)} alt="Context" />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -292,7 +385,7 @@ export default function ChatPanel({
 
       <div
         ref={messagesContainerRef}
-        className={`messages-container messages-container--relative ${scrollable ? 'messages-container--scrollable' : ''}`.trim()}
+        className="messages-container messages-container--relative"
         onScroll={handleMessagesScroll}
       >
         {isDraft && <p className="new-chat-watermark">new chat</p>}
@@ -304,7 +397,15 @@ export default function ChatPanel({
           >
             <div className={`message-bubble ${m.role === 'user' ? 'user-bubble' : 'assistant-bubble'}`}>
               {m.role === 'assistant' ? (
-                <ReactMarkdown>{m.text}</ReactMarkdown>
+                m.text === '...' ? (
+                  <span className="typing-dots" aria-label="Thinking">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                ) : (
+                  <ReactMarkdown>{m.text}</ReactMarkdown>
+                )
               ) : (
                 m.text
               )}
@@ -321,11 +422,11 @@ export default function ChatPanel({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKey}
           placeholder="Message…"
-          disabled={chatStatus === 'pending'}
+          disabled={isStreaming}
         />
         <button
           type="button"
-          className={`send-button ${input.trim() && chatStatus !== 'pending' ? 'active' : ''}`}
+          className={`send-button ${input.trim() && !isStreaming ? 'active' : ''}`}
           onClick={send}
           disabled={sendDisabled}
         >
