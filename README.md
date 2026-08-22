@@ -43,16 +43,20 @@ Click outside the chat card to dismiss it (unless locked). That clears the in-me
        ▼ │
   [Rust Core] (Tauri App)
        │ ▲
-       │ │  Shell plugin spawn + event stream
+       │ │  Shell plugin spawn + stdin/stdout JSON (chat daemon)
+       │ │  Shell plugin spawn + output() (capture, one-shot)
        ▼ │
-[Python Sidecars] (Dev: .venv | Prod: Standalone .exe)
-  ├── capture  (text + screen region capture)
-  └── chat     (LiteLLM streaming, any provider)
+[Python Sidecars] (Dev: .venv | Prod: Standalone binaries)
+  ├── capture  (text + screen region capture) — onefile exe
+  └── chat     (LiteLLM streaming, any provider) — onedir folder, long-lived daemon
 ```
 
 - **UI (`ui/`)** — two Vite entrypoints: Console and chat card.
-- **Rust (`src-tauri/`)** — hotkeys, window management, settings store, sidecar spawn, thread storage.
+- **Rust (`src-tauri/`)** — hotkeys, window management, settings store, sidecar lifecycle, thread storage.
 - **Python (`sidecars/`)** — OS capture helpers, provider/model listing, LLM streaming.
+
+### Chat daemon (performance)
+`chat` runs as a **long-lived daemon process** rather than being spawned per-request. Rust communicates over stdin/stdout using a newline-delimited JSON protocol. The daemon is warmed in parallel when the hotkey fires, so by the time the user presses Enter the Python process is already loaded and ready.
 
 ---
 
@@ -121,7 +125,7 @@ Start  →  Settings  →  Update & Security  →  Windows Security  →  Open W
   →  Potentially unwanted app blocking: Off
 ```
 
-**Windows 8.1** — no “Reputation-based protection” page in Windows Security. Use PowerShell **as Administrator**:
+**Windows 8.1** — no "Reputation-based protection" page in Windows Security. Use PowerShell **as Administrator**:
 
 ```powershell
 Set-MpPreference -PUAProtection Disabled
@@ -136,28 +140,45 @@ After installing, you can turn PUA blocking back on. If Defender quarantined Mim
 ## Build from source
 
 ### 1. Build Python Binaries
-The production Rust app expects pre-compiled executables in `src-tauri/binaries/`.
+
+The production Rust app expects pre-compiled binaries in `src-tauri/binaries/`.
+
+> **Note on sidecar formats:**
+> - `capture` is built as **onefile** — produces a single `dist/capture.exe`.
+> - `chat` is built as **onedir** — produces a `dist/chat/` folder. This avoids the per-launch
+>   temp-unpack overhead of onefile, giving faster cold-start after the daemon is first spawned.
+
 ```bash
 cd sidecars
 .venv\Scripts\activate
 # Install PyInstaller if not present
 pip install pyinstaller
 
-# Build the standalone executables
+# Build capture (onefile)
 pyinstaller capture.spec
+
+# Build chat (onedir)
 pyinstaller chat.spec
 ```
 
 ### 2. Stage Binaries for Tauri
+
 From `sidecars/` (with the venv active):
 ```bash
 python stage_binaries.py
 ```
-This moves `dist/capture.exe` and `dist/chat.exe` into `src-tauri/binaries/` with the correct `rustc` target-triple suffix.
+
+This script:
+- Removes any stale binary at the destination path before staging (prevents old builds from being silently picked up)
+- Moves `dist/capture.exe` → `src-tauri/binaries/capture-<triple>.exe`
+- Moves `dist/chat.exe` → `src-tauri/binaries/chat-<triple>.exe`
+
+The `<triple>` is your host Rust target (e.g. `x86_64-pc-windows-msvc`), queried from `rustc --print host-tuple`.
 
 ### 3. Build the Tauri App
 From the root directory:
 ```bash
+cd..
 npm run build
 ```
 

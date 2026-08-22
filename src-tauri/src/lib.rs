@@ -6,6 +6,7 @@ use tauri::{Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, State
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_store::StoreExt;
 
+mod chat_daemon;
 mod sidecars;
 mod stream;
 mod chats;
@@ -133,7 +134,11 @@ fn open_console(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
-    app.exit(0);
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
+        app_clone.state::<chat_daemon::ChatDaemon>().shutdown().await;
+        app_clone.exit(0);
+    });
 }
 
 #[tauri::command]
@@ -306,6 +311,9 @@ impl Drop for CapturBusyGuard<'_> {
 }
 
 async fn handle_hotkey_capture(app: tauri::AppHandle) {
+    // Warm the chat daemon in parallel — fire and forget, never blocks capture.
+    app.state::<chat_daemon::ChatDaemon>().warm(app.clone());
+
     let state = app.state::<ListenerState>();
     let _guard = CapturBusyGuard(&state.capture_busy);
     let result = match sidecars::run_capture(&app).await {
@@ -428,6 +436,7 @@ pub fn run() {
                 }
             }
         })
+        .manage(chat_daemon::ChatDaemon::new())
         .manage(ListenerState {
             active: AtomicBool::new(true),
             capture_busy: AtomicBool::new(false),
@@ -480,6 +489,19 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 configure_overlay_window(&window);
             }
+
+            // Background TTL tick: check every 60s, kill daemon after 1h idle.
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let ttl = std::time::Duration::from_secs(3600);
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                    app_handle
+                        .state::<chat_daemon::ChatDaemon>()
+                        .kill_if_idle(ttl)
+                        .await;
+                }
+            });
 
             Ok(())
         })
