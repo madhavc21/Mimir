@@ -6,7 +6,6 @@ use tauri::AppHandle;
 use tauri_plugin_store::{Error as StoreError, StoreExt};
 
 pub const DEFAULT_MODEL: &str = "gemini/gemini-2.5-flash-lite";
-pub const MIMIR_API_KEY_ENV: &str = "MIMIR_API_KEY";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelInfo {

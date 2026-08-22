@@ -2,6 +2,10 @@
 
 Run from the sidecars/ directory after building capture.exe and chat.exe:
     python stage_binaries.py
+
+Both sidecars are onefile builds. This script:
+  1. Cleans any existing staged binary (file or leftover folder) for each sidecar.
+  2. Moves the fresh dist/<name>.exe into src-tauri/binaries/<name>-<triple>.exe.
 """
 
 import shutil
@@ -36,11 +40,25 @@ def main() -> int:
     for name in SIDECARS:
         src = dist_dir / f"{name}{ext}"
         dst = binaries_dir / f"{name}-{target}{ext}"
+
         if not src.is_file():
             print(f"error: missing {src} — run PyInstaller first", file=sys.stderr)
             return 1
+
+        # ── clean destination ────────────────────────────────────────────────
+        # Remove any stale file OR leftover onedir folder with the same stem
+        # so the build never silently bundles an old binary.
+        dst_stem = binaries_dir / f"{name}-{target}"   # base path without ext
+        if dst.exists():
+            dst.unlink()
+            print(f"removed stale {dst.relative_to(sidecars_dir.parent)}")
+        if dst_stem.is_dir():
+            shutil.rmtree(dst_stem)
+            print(f"removed stale {dst_stem.relative_to(sidecars_dir.parent)}/")
+
+        # ── stage ────────────────────────────────────────────────────────────
         shutil.move(str(src), str(dst))
-        print(f"staged {dst.relative_to(sidecars_dir.parent)}")
+        print(f"staged  {dst.relative_to(sidecars_dir.parent)}")
 
     return 0
 

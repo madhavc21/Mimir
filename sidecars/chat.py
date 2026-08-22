@@ -1,21 +1,18 @@
 import sys
 import json
 import traceback
-import litellm
 import os
-
-litellm.drop_params = True
 import base64
 import io
 
-from PIL import Image
+import litellm
+litellm.drop_params = True
 
+from PIL import Image
 from litellm import get_valid_models
 
 from services.logger import setup_logger
 logger = setup_logger("chat")
-
-MIMIR_API_KEY_ENV = "MIMIR_API_KEY"
 
 SYSTEM_PROMPT = """
 You are Mimir, a helpful AI assistant that lives in the user's desktop.
@@ -56,10 +53,20 @@ Answer feature questions directly and practically.
 If provided context is not enough to answer or understand the context, request more context (e.g. "double-click the header to lock, then press your hotkey again to add a new screenshot as context").
 Do not invent features beyond what is listed here.
 
+
+## Answering Behaviour
+
+Answer in accordance to context and request complexity:
+- If a one line (or few line) answer wholly satisfies the query, then limit the answer to the same
+- If the query requires a concept breakdown, a complex definition, etc for the answer to be satisfactory, then do so.
+
+Your answers must not include fluff and filler lines.
 """
 
-def _api_key():
-    return os.environ.get(MIMIR_API_KEY_ENV) or None
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _image_path_to_message(image_path):
     try:
@@ -79,65 +86,51 @@ def _image_path_to_message(image_path):
     except Exception as e:
         logger.exception("Failed to encode image path: %s", image_path)
         raise e
-                
+
 def _unpack_history(history):
     logger.debug("Unpacking history. Message count: %d", len(history))
     history_unpacked = []
     for msg in history:
         if msg.get("role") == "user":
-            user_content = [
-                {
-                    "type": "text",
-                    "text": msg.get("content", "")
-                }
-            ]
-            history_unpacked.append(
-                {
-                "role": "user", 
-                "content": user_content
-            })
+            user_content = [{"type": "text", "text": msg.get("content", "")}]
+            history_unpacked.append({"role": "user", "content": user_content})
         else:
-            history_unpacked.append(
-                {
-                    "role": msg.get("role"),
-                    "content": msg.get("content")
-                }
-            )
+            history_unpacked.append({"role": msg.get("role"), "content": msg.get("content")})
     return history_unpacked
+
+
+def _full_model_id(provider: str, name: str) -> str:
+    if "/" in name:
+        return name
+    return f"{provider}/{name}"
+
+
+# ---------------------------------------------------------------------------
+# Core inference
+# ---------------------------------------------------------------------------
 
 def inference(message, image_path, history, model="gemini/gemini-2.5-flash-lite", api_key=None):
     try:
         logger.info("Initializing inference. Model: %s", model)
         logger.debug("User prompt message: %s", message)
         logger.debug("Image path: %s", image_path)
-        
+
         clean_image_path = None
         if image_path and image_path.lower() not in ("none", "null", ""):
             clean_image_path = image_path
 
-        user_content = [
-            {
-                "type": "text",
-                "text": message
-            }
-        ]
-        
+        user_content = [{"type": "text", "text": message}]
+
         if clean_image_path:
             logger.info("Injecting image attachment to prompt content")
             user_content.append(_image_path_to_message(clean_image_path))
-            
+
         messages_litellm = [
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT
-            },
+            {"role": "system", "content": SYSTEM_PROMPT},
             *_unpack_history(history),
-            {
-                "role": "user", 
-                "content": user_content
-            }
+            {"role": "user", "content": user_content}
         ]
-        
+
         logger.info("Requesting LiteLLM completion stream...")
         partial_message = ""
         completion_kwargs = {
@@ -159,27 +152,50 @@ def inference(message, image_path, history, model="gemini/gemini-2.5-flash-lite"
                 if content is not None:
                     partial_message += content
             yield partial_message
-            
+
         logger.info("Inference completed successfully. Total output length: %d chars", len(partial_message))
-        
-    except Exception as e:
+
+    except Exception:
         logger.exception("Exception occurred during model inference")
         raise
 
-def _full_model_id(provider: str, name: str) -> str:
-    if "/" in name:
-        return name
-    return f"{provider}/{name}"
 
-def list_providers():
-    providers = sorted(litellm.models_by_provider.keys())
-    print(json.dumps(providers))
-    sys.stdout.flush()
+# ---------------------------------------------------------------------------
+# Op implementations (called from daemon dispatch)
+# ---------------------------------------------------------------------------
 
-def list_models_for_provider(provider: str):
+def _op_stream(req_id: str, message: str, image_path: str, history: list,
+               model: str, api_key: str | None):
+    """Stream tokens to stdout for a single request, then emit done."""
+    clean_image_path = None
+    if image_path and image_path.lower() not in ("none", "null", ""):
+        clean_image_path = image_path
+
+    if clean_image_path and not litellm.supports_vision(model):
+        logger.error("Model %s does not support vision, but an image was supplied.", model)
+        _write({"id": req_id, "status": "error", "message": "Selected model does not support vision"})
+        return
+
     try:
-        api_key = _api_key()
-        logger.info("Listing models for provider: %s", provider)
+        logger.info("[%s] Streaming tokens to stdout...", req_id)
+        for partial_response in inference(message, image_path, history, model=model, api_key=api_key):
+            _write({"token": partial_response})
+        _write({"id": req_id, "type": "done"})
+        logger.info("[%s] Stream complete", req_id)
+    except Exception as e:
+        logger.exception("[%s] Critical stream error", req_id)
+        _write({"id": req_id, "status": "error", "message": str(e), "traceback": traceback.format_exc()})
+
+
+def _op_list_providers(req_id: str):
+    providers = sorted(litellm.models_by_provider.keys())
+    _write({"id": req_id, "result": providers})
+    _write({"id": req_id, "type": "done"})
+
+
+def _op_list_models(req_id: str, provider: str, api_key: str | None):
+    try:
+        logger.info("[%s] Listing models for provider: %s", req_id, provider)
         live = None
         if api_key:
             try:
@@ -190,10 +206,12 @@ def list_models_for_provider(provider: str):
                 )
             except Exception:
                 logger.info("Live model list unavailable for %s, using catalog", provider)
+
         names = live if live else litellm.models_by_provider.get(provider, [])
         if not names:
-            print(json.dumps({"status": "error", "message": f"Unknown provider: {provider}"}))
-            sys.exit(1)
+            _write({"id": req_id, "status": "error", "message": f"Unknown provider: {provider}"})
+            return
+
         result = []
         seen = set()
         for name in names:
@@ -201,79 +219,89 @@ def list_models_for_provider(provider: str):
             if model_id in seen:
                 continue
             seen.add(model_id)
-            result.append({
-                "id": model_id,
-                "supportsVision": litellm.supports_vision(model=model_id),
-            })
+            result.append({"id": model_id, "supportsVision": litellm.supports_vision(model=model_id)})
+
         result = [m for m in result if m["supportsVision"]]
         result.sort(key=lambda m: m["id"])
-        print(json.dumps(result))
-        sys.stdout.flush()
+        _write({"id": req_id, "result": result})
+        _write({"id": req_id, "type": "done"})
     except Exception as e:
-        logger.exception("Failed to list models")
-        print(json.dumps({"status": "error", "message": str(e)}))
-        sys.exit(1)
+        logger.exception("[%s] Failed to list models", req_id)
+        _write({"id": req_id, "status": "error", "message": str(e)})
 
-def stream_for_rust(message, image_path, history, model="gemini/gemini-2.5-flash-lite"):
-    api_key = _api_key()
-    clean_image_path = None
-    if image_path and image_path.lower() not in ("none", "null", ""):
-        clean_image_path = image_path
 
-    if clean_image_path:
-        if not litellm.supports_vision(model):
-            logger.error("Model %s does not support vision, but an image was supplied.", model)
-            print(json.dumps({"status": "error", "message": "Selected model does not support vision"}))
-            sys.exit(1)
+# ---------------------------------------------------------------------------
+# Stdout helper
+# ---------------------------------------------------------------------------
 
-    try:
-        logger.info("Streaming tokens to stdout...")
-        for partial_response in inference(message, image_path, history, model=model, api_key=api_key):
-            payload = json.dumps({"token": partial_response})
-            print(payload)
-            sys.stdout.flush()
+def _write(obj: dict):
+    print(json.dumps(obj), flush=True)
 
-    except Exception as e:
-        logger.exception("Critical stream error in stream_for_rust")
-        print(json.dumps({"status": "error", "message": str(e), "traceback": traceback.format_exc()}))
+
+# ---------------------------------------------------------------------------
+# Daemon entry point
+# ---------------------------------------------------------------------------
+
+def daemon_main():
+    logger.info("Chat daemon starting up — imports loaded, emitting ready")
+    _write({"type": "ready"})
+
+    for raw_line in sys.stdin:
+        raw_line = raw_line.strip()
+        if not raw_line:
+            continue
+        try:
+            req = json.loads(raw_line)
+        except json.JSONDecodeError as e:
+            logger.warning("Daemon received invalid JSON: %s | error: %s", raw_line, e)
+            _write({"status": "error", "message": f"Invalid JSON: {e}"})
+            continue
+
+        req_id = str(req.get("id", ""))
+        op = req.get("op", "")
+        logger.info("Daemon dispatching op=%s id=%s", op, req_id)
+
+        if op == "stream":
+            _op_stream(
+                req_id=req_id,
+                message=req.get("message", ""),
+                image_path=req.get("image_path", ""),
+                history=req.get("history", []),
+                model=req.get("model", "gemini/gemini-2.5-flash-lite"),
+                api_key=req.get("api_key") or None,
+            )
+        elif op == "list_providers":
+            _op_list_providers(req_id)
+        elif op == "list_models":
+            _op_list_models(
+                req_id=req_id,
+                provider=req.get("provider", ""),
+                api_key=req.get("api_key") or None,
+            )
+        else:
+            logger.warning("Daemon received unknown op: %s", op)
+            _write({"id": req_id, "status": "error", "message": f"Unknown op: {op}"})
+
+    logger.info("Daemon stdin closed — exiting")
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 def main():
     logger.info("Chat sidecar starting up...")
 
-    if len(sys.argv) >= 2 and sys.argv[1] == "--list-providers":
-        list_providers()
+    if len(sys.argv) >= 2 and sys.argv[1] == "--daemon":
+        daemon_main()
         return
 
-    if len(sys.argv) >= 2 and sys.argv[1] == "--list-models":
-        provider = sys.argv[2] if len(sys.argv) > 2 else ""
-        if not provider:
-            print(json.dumps({"status": "error", "message": "Provider required"}))
-            sys.exit(1)
-        list_models_for_provider(provider)
-        return
+    # Legacy one-shot modes removed — all ops go through daemon stdin.
+    logger.error("No mode specified. Use --daemon.")
+    print(json.dumps({"status": "error", "message": "Use --daemon mode"}))
+    sys.exit(1)
 
-    if len(sys.argv) < 4:
-        logger.error("Insufficient CLI arguments received: %s", sys.argv)
-        print(json.dumps({"status": "error", "message": "Insufficient arguments", "traceback": traceback.format_exc()}))
-        sys.exit(1)
-        
-    message = sys.argv[1]
-    image_path = sys.argv[2]
-    
-    try:
-        history_json = json.loads(sys.argv[3])
-    except Exception as e:
-        logger.exception("Failed to parse history JSON argument")
-        print(json.dumps({"status": "error", "message": "Failed to parse history JSON", "traceback": traceback.format_exc()}))
-        sys.exit(1)
 
-    model = sys.argv[4] if len(sys.argv) > 4 else "gemini/gemini-2.5-flash-lite"
-    if "/" not in model:
-        print(json.dumps({"status": "error", "message": f"Model must be provider/model format, got: {model}"}))
-        sys.exit(1)
-
-    stream_for_rust(message, image_path, history_json, model=model)
-    
 if __name__ == "__main__":
     try:
         main()
