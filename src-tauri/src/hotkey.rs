@@ -4,7 +4,7 @@ use tauri::AppHandle;
 use tauri_plugin_global_shortcut::Shortcut;
 use crate::settings;
 
-pub const DEFAULT_HOTKEY: &str = "Ctrl+Shift+E";
+pub const DEFAULT_HOTKEY: &str = "Ctrl+Space";
 
 pub fn normalize_hotkey(raw: &str) -> String {
     raw.split('+')

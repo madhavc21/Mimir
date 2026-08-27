@@ -19,7 +19,7 @@ Press a global hotkey from whatever app you're in, grab context from the screen,
 
 ## What it does
 
-* **Global hotkey** (`Ctrl+Shift+E` by default, rebindable) — opens the chat card at your cursor while the listener is live.
+* **Global hotkey** (`Ctrl+Space` by default, rebindable) — opens the chat card at your cursor while the listener is live.
 * **Ask about what's on screen** — Mimir pulls context from your desktop before you type:
   * **Text selected** — the highlight is sent as chat context.
   * **Nothing selected** — a screen overlay lets you drag a box around any region; that snippet goes into the chat (requires a vision-capable model).
@@ -29,34 +29,6 @@ Press a global hotkey from whatever app you're in, grab context from the screen,
 * **Chat threads** — saved locally on disk; browse and reopen them from the Console or the card's history menu.
 
 Click outside the chat card to dismiss it (unless locked). That clears the in-memory session on the card; saved threads are unchanged.
-
----
-
-## How it's put together
-
-```text
-[Console UI]  console.html  →  settings, live/sleep, quit
-[Chat UI]     index.html     →  capture context + conversation
-
-       │ ▲
-       │ │  Tauri IPC (invokes & events)
-       ▼ │
-  [Rust Core] (Tauri App)
-       │ ▲
-       │ │  Shell plugin spawn + stdin/stdout JSON (chat daemon)
-       │ │  Shell plugin spawn + output() (capture, one-shot)
-       ▼ │
-[Python Sidecars] (Dev: .venv | Prod: Standalone binaries)
-  ├── capture  (text + screen region capture) — onefile exe
-  └── chat     (LiteLLM streaming, any provider) — onedir folder, long-lived daemon
-```
-
-- **UI (`ui/`)** — two Vite entrypoints: Console and chat card.
-- **Rust (`src-tauri/`)** — hotkeys, window management, settings store, sidecar lifecycle, thread storage.
-- **Python (`sidecars/`)** — OS capture helpers, provider/model listing, LLM streaming.
-
-### Chat daemon (performance)
-`chat` runs as a **long-lived daemon process** rather than being spawned per-request. Rust communicates over stdin/stdout using a newline-delimited JSON protocol. The daemon is warmed in parallel when the hotkey fires, so by the time the user presses Enter the Python process is already loaded and ready.
 
 ---
 
@@ -93,7 +65,7 @@ From the root directory:
 ```bash
 npm run dev
 ```
-Console opens on launch. Press `Ctrl+Shift+E` (while **Live**) to open the chat card at your cursor.
+Console opens on launch. Press `Ctrl+Space` (while **Live**) to open the chat card at your cursor.
 
 ---
 
@@ -104,7 +76,7 @@ Console opens on launch. Press `Ctrl+Shift+E` (while **Live**) to open the chat 
 1. Download **`Mimir_*_x64-setup.exe`** from [GitHub Releases](https://github.com/madhavc21/Mimir/releases) (latest `v1.x` tag).
 2. Run the installer and launch Mimir. The **Console** window opens on first start.
 3. Open **Model** in the Console sidebar — paste your API key, pick a provider, and select a vision-capable model (needed for screen-region capture).
-4. Press your capture hotkey (`Ctrl+Shift+E` by default) from any app while Mimir is **Live**.
+4. Press your capture hotkey (`Ctrl+Space` by default) from any app while Mimir is **Live**.
 
 ### If the installer won't run or the app closes immediately
 
@@ -141,7 +113,7 @@ After installing, you can turn PUA blocking back on. If Defender quarantined Mim
 
 ### 1. Build Python Binaries
 
-The production Rust app expects pre-compiled binaries in `src-tauri/binaries/`.
+The Rust app expects pre-compiled binaries in `src-tauri/binaries/`.
 
 > **Note on sidecar formats:**
 > - `capture` is built as **onefile** — produces a single `dist/capture.exe`.
@@ -176,9 +148,9 @@ This script:
 The `<triple>` is your host Rust target (e.g. `x86_64-pc-windows-msvc`), queried from `rustc --print host-tuple`.
 
 ### 3. Build the Tauri App
-From the root directory:
+
 ```bash
-cd..
+cd.. # From the root directory
 npm run build
 ```
 

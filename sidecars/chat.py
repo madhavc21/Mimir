@@ -93,6 +93,12 @@ def _unpack_history(history):
     for msg in history:
         if msg.get("role") == "user":
             user_content = [{"type": "text", "text": msg.get("content", "")}]
+            image_path = msg.get("image_path")
+            if image_path and image_path.lower() not in ("none", "null", ""):
+                try:
+                    user_content.append(_image_path_to_message(image_path))
+                except Exception:
+                    logger.warning("Skipping unreadable history image: %s", image_path)
             history_unpacked.append({"role": "user", "content": user_content})
         else:
             history_unpacked.append({"role": msg.get("role"), "content": msg.get("content")})
@@ -136,7 +142,6 @@ def inference(message, image_path, history, model="gemini/gemini-2.5-flash-lite"
         completion_kwargs = {
             "model": model,
             "messages": messages_litellm,
-            "max_tokens": 512,
             "temperature": 0.7,
             "top_p": 0.9,
             "stream": True,
