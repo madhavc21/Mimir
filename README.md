@@ -15,6 +15,8 @@ Mimir is a Windows desktop assistant built with **Tauri**, **React/TypeScript**,
 
 Press a global hotkey from whatever app you're in, grab context from the screen, and ask about it in a small floating chat window. Works on selected text or anything visible — code, docs, error dialogs, charts, PDFs, browser pages.
 
+https://github.com/user-attachments/assets/34a9de71-9649-449c-8072-ddb9759c6c21
+
 ---
 
 ## What it does
