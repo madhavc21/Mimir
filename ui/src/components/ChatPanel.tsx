@@ -16,6 +16,7 @@ interface Message {
   id: number
   text: string
   role: 'user' | 'assistant'
+  image?: string
 }
 
 type ChatStatus = 'idle' | 'pending' | 'streaming'
@@ -57,6 +58,7 @@ function storedToMessages(stored: StoredMessage[]): Message[] {
       id: ts + i,
       text: m.content,
       role: m.role,
+      image: m.imagePath,
     }
   })
 }
@@ -68,6 +70,7 @@ function messagesToStored(messages: Message[]): StoredMessage[] {
     .map((m, i) => ({
       role: m.role,
       content: m.text,
+      imagePath: m.image,
       createdAt: new Date(now + i).toISOString(),
     }))
 }
@@ -93,13 +96,12 @@ export default function ChatPanel({
 
   const hasContext = Boolean(copiedText || copiedImage)
 
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const justCreatedRef = useRef<string | null>(null)
   const dirtyRef = useRef(false)
   const pendingSaveThreadRef = useRef<string | null>(null)
-  const lastImagePathRef = useRef<string | undefined>(undefined)
   const autoScrollRef = useRef(true)
   const streamIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -243,15 +245,10 @@ export default function ChatPanel({
 
     const timer = setTimeout(() => {
       const stored = messagesToStored(messages)
-      const lastUser = [...stored].reverse().find((m) => m.role === 'user')
-      if (lastUser && lastImagePathRef.current) {
-        lastUser.imagePath = lastImagePathRef.current
-      }
       saveThreadMessages(saveId, stored)
         .then(() => {
           dirtyRef.current = false
           pendingSaveThreadRef.current = null
-          lastImagePathRef.current = undefined
           onThreadsChanged?.()
         })
         .catch((e) => console.error('save_thread_messages failed', e))
@@ -268,12 +265,13 @@ export default function ChatPanel({
       ? `Highlighted Text: ${copiedText}\n\nquestion:\n${text}`
       : text
 
-    const userMsg: Message = { id: Date.now(), text, role: 'user' }
+    const userMsg: Message = { id: Date.now(), text, role: 'user', image: copiedImage || undefined }
     const placeholderMsg: Message = { id: Date.now() + 1, text: '...', role: 'assistant' }
 
     const historyForLlm = messages.map((m) => ({
       role: m.role,
       content: m.text,
+      image_path: m.image,
     }))
 
     clearStreamIdleTimer()
@@ -282,7 +280,6 @@ export default function ChatPanel({
     setInput('')
     setChatStatus('pending')
     dirtyRef.current = true
-    lastImagePathRef.current = copiedImage || undefined
 
     let resolvedThreadId = threadId
 
@@ -328,6 +325,13 @@ export default function ChatPanel({
       send()
     }
   }
+
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [input])
 
   const isStreaming = chatStatus === 'pending' || chatStatus === 'streaming'
   const sendDisabled = !input.trim() || isStreaming
@@ -416,13 +420,14 @@ export default function ChatPanel({
       </div>
 
       <div className="chat-footer">
-        <input
+        <textarea
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKey}
           placeholder="Message…"
           disabled={isStreaming}
+          rows={1}
         />
         <button
           type="button"

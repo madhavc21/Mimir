@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   selectedProvider: null,
   selectedModel: 'gemini/gemini-2.5-flash-lite',
   autostart: true,
-  hotkey: 'Ctrl+Shift+E',
+  hotkey: 'Ctrl+Space',
   hotkeyOpens: 'new',
 }
 

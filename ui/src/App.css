@@ -947,7 +947,7 @@
   padding: 10px 12px 12px;
   border-top: 1px solid var(--mimir-border-subtle);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   background: rgba(0, 0, 0, 0.12);
   flex-shrink: 0;
@@ -956,10 +956,17 @@
   box-sizing: border-box;
 }
 
-.chat-footer input {
+.chat-footer textarea {
   flex: 1 1 0;
   min-width: 0;
   width: 0;
+  max-height: 120px;
+  resize: none;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  white-space: pre-wrap;
+  word-break: break-word;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--mimir-border);
   border-radius: var(--mimir-radius-sm);
@@ -968,22 +975,27 @@
   font-size: 13px;
   outline: none;
   font-family: inherit;
+  line-height: 1.4;
   box-sizing: border-box;
   transition: border-color 0.15s var(--mimir-ease-out), box-shadow 0.15s var(--mimir-ease-out);
 }
 
-.chat-footer input::placeholder {
+.chat-footer textarea::placeholder {
   color: var(--mimir-ink-muted);
 }
 
-.chat-footer input:focus {
+.chat-footer textarea:focus {
   border-color: var(--mimir-accent-border);
   box-shadow: 0 0 0 3px var(--mimir-accent-soft);
 }
 
-.chat-footer input:disabled {
+.chat-footer textarea:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.chat-footer textarea::-webkit-scrollbar {
+  display: none;
 }
 
 .send-button {

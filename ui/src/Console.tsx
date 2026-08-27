@@ -729,7 +729,7 @@ export default function Console() {
           {section === 'about' && (
             <div className="console-content-inner space-y-4">
               <section className="console-panel space-y-2">
-                <p className="console-panel-title">Mimir v1.1.0</p>
+                <p className="console-panel-title">Mimir v1.1.1</p>
                 <p className="console-panel-desc">
                   A desktop assistant that appears on demand — highlight text or draw a region,
                   press your hotkey, and ask without leaving the app you&apos;re in.
